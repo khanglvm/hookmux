@@ -4,7 +4,8 @@
 //
 // response_format json_schema support, per each server's own docs:
 // - OpenAI: https://platform.openai.com/docs/guides/structured-outputs
-//   (strict mode needs every property in `required` and additionalProperties false).
+//   documents json_schema on Chat Completions. Its examples list every property in
+//   `required` and set additionalProperties false, so this schema does the same.
 // - llama.cpp llama-server: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
 //   accepts the OpenAI wrapper form {type: "json_schema", json_schema: {name, strict, schema}}.
 // - LM Studio: https://lmstudio.ai/docs/developer/openai-compat/structured-output
@@ -50,17 +51,20 @@ export function requestBody(provider: ProviderSettings, request: ClassifyRequest
   };
 }
 
+/** Parses JSON, or returns null for a body that is not JSON. */
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 /** Reads `choices[0].message.content` as the classification JSON; null when anything is off. */
 export function parseClassification(body: unknown, labels: string[]): { label: string; confidence: number } | null {
   const content = (body as { choices?: { message?: { content?: unknown } }[] } | null)?.choices?.[0]?.message?.content;
   if (typeof content !== "string") return null;
-  let answer: unknown;
-  try {
-    answer = JSON.parse(content);
-  } catch {
-    return null;
-  }
-  const { label, confidence } = (answer ?? {}) as { label?: unknown; confidence?: unknown };
+  const { label, confidence } = (parseJson(content) ?? {}) as { label?: unknown; confidence?: unknown };
   if (typeof label !== "string" || !labels.includes(label)) return null;
   if (typeof confidence !== "number" || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) return null;
   return { label, confidence };
@@ -84,8 +88,10 @@ export async function classifyOpenAICompat(
   request: ClassifyRequest,
   budget: ClassifyBudget,
 ): Promise<ClassifyOutcome> {
-  const ownTimeout = provider.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
-  const timeoutMs = Math.min(ownTimeout, budget.remainingMs);
+  // AbortSignal.timeout throws on a fractional delay, and remainingMs is a float.
+  const ownTimeout = Math.max(1, Math.floor(provider.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS));
+  const clipped = budget.remainingMs < ownTimeout;
+  const timeoutMs = clipped ? Math.floor(budget.remainingMs) : ownTimeout;
   if (budget.deadline.aborted || timeoutMs <= 0) return { ok: false, error: "deadline reached", providerFault: false };
   const timeout = AbortSignal.timeout(timeoutMs);
   try {
@@ -107,14 +113,15 @@ export async function classifyOpenAICompat(
         providerFault: isProviderFaultStatus(response.status),
       };
     }
-    const parsed = parseClassification(await response.json().catch(() => null), request.labels);
+    // text() rather than json(), so an abort while the body streams reaches the catch below.
+    const parsed = parseClassification(parseJson(await response.text()), request.labels);
     if (!parsed) return { ok: false, error: "provider returned no valid label and confidence", providerFault: false };
     return { ok: true, ...parsed };
   } catch (error) {
     if (budget.deadline.aborted) return { ok: false, error: "deadline reached", providerFault: false };
     // A timeout cut short by the hub deadline is not the provider's fault.
     if (timeout.aborted) {
-      return { ok: false, error: `provider timed out after ${timeoutMs} ms`, providerFault: timeoutMs === ownTimeout };
+      return { ok: false, error: `provider timed out after ${timeoutMs} ms`, providerFault: !clipped };
     }
     const code = (error as { cause?: { code?: unknown } }).cause?.code;
     return {

@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingHttpHeaders } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, test } from "node:test";
 import "../../src/checks/index.ts";
 import { getCheck, type ProviderSettings } from "../../src/checks/registry.ts";
 import type { CheckSpec, Signal } from "../../src/core/types.ts";
+import { readConfig } from "../../src/load/config.ts";
 import { COOLDOWN_MS, isCoolingDown, recordFailure, recordSuccess } from "../../src/providers/breaker.ts";
-import { isLoopbackUrl } from "../../src/providers/policy.ts";
+import { isLoopbackUrl, remoteRefusal } from "../../src/providers/policy.ts";
 import { type ContextOptions, checkContext, pluginSpec, promptEvent, useTempHome } from "./support.ts";
 
 useTempHome();
@@ -147,6 +151,27 @@ test("the hub deadline is not blamed on the provider", async () => {
   const { signal, name } = await run({ timeoutMs: 2000 }, { signal: controller.signal });
   assert.equal(signal.error, "deadline reached");
   assert.equal(isCoolingDown(name), false);
+});
+
+test("a timeout clipped by a fractional hub budget is not blamed on the provider", async () => {
+  reply = () => ({ delayMs: 500, body: chat({ label: "design", confidence: 0.9 }) });
+  const { signal, name } = await run({ timeoutMs: 2000 }, { remainingMs: 80.6 });
+  assert.equal(signal.error, "provider timed out after 80 ms");
+  assert.equal(isCoolingDown(name), false);
+});
+
+test("allow_remote in config.toml lets a remote provider through", () => {
+  const file = join(mkdtempSync(join(tmpdir(), "hookmux-config-")), "config.toml");
+  writeFileSync(
+    file,
+    '[providers.cloud]\nkind = "openai_compat"\nurl = "https://api.example.com/v1"\nallow_remote = true\n' +
+      '[providers.plain]\nkind = "openai_compat"\nurl = "https://api.example.com/v1"\n',
+  );
+  const { providers } = readConfig(file);
+  assert.equal(providers.cloud?.allowRemote, true);
+  assert.equal(providers.plain?.allowRemote, undefined);
+  assert.equal(remoteRefusal("cloud", providers.cloud!), null);
+  assert.match(remoteRefusal("plain", providers.plain!) ?? "", /allow_remote/);
 });
 
 test("a 500 trips the breaker and later runs skip the provider", async () => {

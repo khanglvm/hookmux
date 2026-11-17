@@ -284,7 +284,9 @@ registerCheck({
   async run(spec, ctx) {
     const script = resolveScript(ctx, spec.command as string);
     if ("error" in script) return unknown(script.error);
-    const budgetMs = Math.min((spec.timeout_ms as number | undefined) ?? DEFAULT_TIMEOUT_MS, ctx.remainingMs());
+    const budgetMs = Math.floor(
+      Math.min((spec.timeout_ms as number | undefined) ?? DEFAULT_TIMEOUT_MS, ctx.remainingMs()),
+    );
     if (ctx.signal.aborted || budgetMs <= 0) return unknown("deadline reached");
     const result = await runProcess({
       file: script.file,

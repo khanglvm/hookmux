@@ -79,6 +79,12 @@ test("JSON true and false are used as given, with evidence clipped", async () =>
   assert.deepEqual(await f.run({ command: "./no.sh" }), { value: false });
 });
 
+test("a script in a subfolder matches its recorded hash however the path is written", async () => {
+  const f = fixture({ "bin/check.sh": sh(`echo '{"value": true}'`) });
+  assert.equal((await f.run({ command: "bin/check.sh" })).value, true);
+  assert.equal((await f.run({ command: "./bin//check.sh" })).value, true);
+});
+
 test("score output accepts a number in range and rejects the wrong type", async () => {
   const f = fixture({ "score.sh": sh(`echo '{"value": 0.42}'`), "big.sh": sh(`echo '{"value": 1.5}'`) });
   assert.equal((await f.run({ command: "score.sh", output: "score" })).value, 0.42);
