@@ -54,6 +54,13 @@ export function satisfiesRange(version: string, range: string): boolean {
 
 registerCheck({
   kind: "host",
+  summary:
+    "True when the agent client matches: its id, a version range, or the effects it supports on this event. Unknown version gives unknown.",
+  options: {
+    id: `list of host ids, e.g. ["codex"]`,
+    version: `range such as ">=0.40" or ">=1.2 <2"`,
+    supports: "list of effects that must be supported here",
+  },
   tier: 0,
   output: "bool",
   modelBacked: false,
@@ -92,6 +99,8 @@ registerCheck({
 
 registerCheck({
   kind: "origin",
+  summary: "True when the prompt origin is one of the listed values.",
+  options: { is: `list of "user", "system", "unknown"` },
   tier: 0,
   output: "bool",
   modelBacked: false,
@@ -107,6 +116,8 @@ registerCheck({
 
 registerCheck({
   kind: "tool",
+  summary: "True when the tool call names one of these tools (canonical or host name).",
+  options: { names: `list such as ["Bash", "Write"]` },
   tier: 0,
   output: "bool",
   modelBacked: false,
@@ -145,6 +156,8 @@ function expandHome(pattern: string): string {
 
 registerCheck({
   kind: "cwd_glob",
+  summary: "True when the working folder matches one of the globs.",
+  options: { patterns: "globs with *, ** and ?; ~/ expands to home" },
   tier: 0,
   output: "bool",
   modelBacked: false,
@@ -162,6 +175,8 @@ registerCheck({
 
 registerCheck({
   kind: "path_exists",
+  summary: "True when any (or all) paths exist, relative to the working folder.",
+  options: { paths: "list of paths", match: `"any" (default) or "all"` },
   tier: 0,
   output: "bool",
   modelBacked: false,

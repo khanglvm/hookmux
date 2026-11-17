@@ -36,6 +36,10 @@ export interface ProviderSettings {
 
 export interface CheckKind {
   kind: string;
+  /** One sentence for `hookmux schema` and the authoring skill's reference. */
+  summary: string;
+  /** Option name to a short description, for the same reference. */
+  options: Record<string, string>;
   tier: Tier;
   output: "bool" | "score";
   /** True when a model decides the value. Model-backed checks cannot justify a block on their own. */

@@ -20,6 +20,8 @@ export interface HostAdapter {
   parse(event: CanonicalEvent, payload: unknown, env: NodeJS.ProcessEnv): HookEvent | null;
   /** The exact stdout for this result. An empty string is always a valid no-op. */
   render(result: HubResult, event: HookEvent): string;
+  /** A minimal valid stdin payload for this event, used by `doctor` and tests. */
+  sample(event: CanonicalEvent, prompt?: string): Record<string, unknown>;
   config: HostConfigEditor;
   /** Where the authoring skill goes; absent when the client has no skill folder. */
   skills?: { global: string };

@@ -113,6 +113,19 @@ export const claudeCode: HostAdapter = {
     return Object.keys(out).length > 0 ? JSON.stringify(out) : "";
   },
 
+  sample(event, prompt = "hookmux doctor check") {
+    const base = {
+      session_id: "hookmux-doctor",
+      transcript_path: "",
+      cwd: process.cwd(),
+      hook_event_name: NATIVE[event],
+    };
+    if (event === "prompt.submit") return { ...base, prompt, permission_mode: "default" };
+    if (event === "session.start") return { ...base, source: "startup" };
+    if (event === "tool.before") return { ...base, tool_name: "Bash", tool_input: { command: "echo ok" } };
+    return { ...base, tool_name: "Bash", tool_input: { command: "echo ok" }, tool_response: { stdout: "ok" } };
+  },
+
   config: {
     file: (env = process.env) => join(configDir(env), "settings.json"),
     detect: (env = process.env) => existsSync(configDir(env)),

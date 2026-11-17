@@ -94,7 +94,8 @@ export function activeSpecs(registry: Registry, hostId: string): PluginSpec[] {
   const out: PluginSpec[] = [];
   for (const p of registry.plugins) {
     if (p.status !== "active" || !p.base) continue;
-    out.push(p.variants?.[hostId] ?? p.base);
+    const spec = p.variants?.[hostId] ?? p.base;
+    out.push(p.fileHashes ? { ...spec, fileHashes: p.fileHashes } : spec);
   }
   return out;
 }

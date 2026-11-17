@@ -28,6 +28,13 @@ function matchAll(patterns: RegExp[], text: string, mode: unknown): Signal {
 
 registerCheck({
   kind: "regex",
+  summary: "True when any (or all) of the patterns match the field.",
+  options: {
+    patterns: "list of regex sources (max 300 chars each)",
+    flags: `subset of "imsu", default "iu"`,
+    match: `"any" (default) or "all"`,
+    field: `event field to read, default "prompt"`,
+  },
   tier: 0,
   output: "bool",
   modelBacked: false,
@@ -69,6 +76,14 @@ function keywordPatterns(spec: CheckSpec, problems: string[]): RegExp[] {
 
 registerCheck({
   kind: "keywords",
+  summary: "True when any (or all) of the words appear as whole words, case-insensitive by default.",
+  options: {
+    words: "list of literal words or phrases",
+    whole_word: "default true",
+    case_sensitive: "default false",
+    match: `"any" (default) or "all"`,
+    field: `event field to read, default "prompt"`,
+  },
   tier: 0,
   output: "bool",
   modelBacked: false,
@@ -90,6 +105,13 @@ registerCheck({
  */
 registerCheck({
   kind: "regex_groups",
+  summary: "Named groups of patterns; true when every group in at least one fire_when combination matches.",
+  options: {
+    groups: "table of group name to pattern list",
+    fire_when: "list of group-name lists",
+    flags: `subset of "imsu", default "iu"`,
+    field: `event field to read, default "prompt"`,
+  },
   tier: 0,
   output: "bool",
   modelBacked: false,

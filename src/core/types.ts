@@ -110,6 +110,8 @@ export interface PluginSpec {
   exclusive?: string;
   onError: "open" | "block";
   params: Record<string, string>;
+  /** SHA-256 per file in the plugin folder, from the registry; scripts are re-verified against it. */
+  fileHashes?: Record<string, string>;
 }
 
 export type PluginOutcome = "fire" | "silent" | "unknown" | "error" | "skipped";
