@@ -18,6 +18,11 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    # @types/node follows the oldest supported Node (engines >=22), so newer
+    # majors would type-check APIs that Node 22 users do not have.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: development
