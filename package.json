@@ -1,0 +1,52 @@
+{
+  "name": "hookmux",
+  "version": "0.1.0",
+  "description": "One hook entry for Claude Code, Codex and Gemini CLI. Plugins decide what to add to the agent's context or block.",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "gemini-cli",
+    "hooks",
+    "agents",
+    "llm"
+  ],
+  "license": "MIT",
+  "author": "khanglvm",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khanglvm/hookmux.git"
+  },
+  "homepage": "https://github.com/khanglvm/hookmux#readme",
+  "bugs": {
+    "url": "https://github.com/khanglvm/hookmux/issues"
+  },
+  "type": "module",
+  "bin": {
+    "hookmux": "dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "launcher",
+    "plugins",
+    "skills"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@12.15.0",
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "node --test --test-reporter=spec \"test/**/*.test.ts\"",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.6",
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "smol-toml": "1.9.1",
+    "typescript": "7.0.2"
+  }
+}

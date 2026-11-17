@@ -1,0 +1,20 @@
+# Cases for `hookmux test moodboard`.
+[[case]]
+prompt = "redesign the pricing page so it feels more premium"
+expect = "fire"
+
+[[case]]
+prompt = "thiết kế lại giao diện trang chủ cho hiện đại hơn"
+expect = "fire"
+
+[[case]]
+prompt = "fix the crash on the settings screen"
+expect = "silent"
+
+[[case]]
+prompt = "match this mockup exactly: figma.com/file/abc"
+expect = "silent"
+
+[[case]]
+prompt = "run the unit tests"
+expect = "silent"

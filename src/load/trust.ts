@@ -1,0 +1,94 @@
+// Content pins for installed plugins. `promote` records a SHA-256 of the whole
+// plugin folder; the registry skips a plugin whose folder no longer matches, so
+// an edit after approval (by a person, an agent or an update) needs approval again.
+
+import { createHash } from "node:crypto";
+import { lstatSync, readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import { getCheck } from "../checks/registry.ts";
+import type { PluginSpec } from "../core/types.ts";
+import { readJson, writeFileAtomic } from "../runtime/fsutil.ts";
+
+const MAX_PLUGIN_FILES = 200;
+const MAX_PLUGIN_BYTES = 4 * 1024 * 1024;
+
+export interface TrustEntry {
+  hash: string;
+  capabilities: string[];
+  promotedAt: string;
+}
+
+export interface TrustStore {
+  plugins: Record<string, TrustEntry>;
+}
+
+export function readTrust(file: string): TrustStore {
+  const store = readJson<TrustStore>(file, { plugins: {} });
+  return store && typeof store.plugins === "object" ? store : { plugins: {} };
+}
+
+export function writeTrust(file: string, store: TrustStore): void {
+  writeFileAtomic(file, `${JSON.stringify(store, null, 2)}\n`);
+}
+
+/** Files and folders in a plugin, sorted; symlinks are refused so a pin covers real content only. */
+export function listPluginFiles(dir: string): { files: string[]; dirs: string[] } {
+  const files: string[] = [];
+  const dirs: string[] = [dir];
+  const walk = (current: string) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      if (entry.name === ".git" || entry.name === ".DS_Store") continue;
+      const full = join(current, entry.name);
+      if (entry.isSymbolicLink()) throw new Error(`${relative(dir, full)} is a symlink; plugins may not contain links`);
+      if (entry.isDirectory()) {
+        dirs.push(full);
+        walk(full);
+      } else if (entry.isFile()) files.push(full);
+      if (files.length > MAX_PLUGIN_FILES) throw new Error(`more than ${MAX_PLUGIN_FILES} files`);
+    }
+  };
+  walk(dir);
+  files.sort();
+  return { files, dirs };
+}
+
+/**
+ * Hash over each file's relative path, byte length and bytes, in sorted order:
+ * `path \0 length \0 content`, the shape used by the skills CLI lockfile.
+ */
+export function hashPlugin(dir: string): string {
+  const hash = createHash("sha256");
+  let total = 0;
+  for (const file of listPluginFiles(dir).files) {
+    const size = lstatSync(file).size;
+    total += size;
+    if (total > MAX_PLUGIN_BYTES) throw new Error(`plugin folder is larger than ${MAX_PLUGIN_BYTES} bytes`);
+    const content = readFileSync(file);
+    hash.update(relative(dir, file).replaceAll("\\", "/"));
+    hash.update("\0");
+    hash.update(String(content.length));
+    hash.update("\0");
+    hash.update(content);
+  }
+  return `sha256:${hash.digest("hex")}`;
+}
+
+/** What a plugin can do, derived from its manifest rather than from its own claims. */
+export function capabilitiesOf(spec: PluginSpec, variants: PluginSpec[] = []): string[] {
+  const caps = new Set<string>();
+  for (const s of [spec, ...variants]) {
+    for (const e of s.events) caps.add(`event:${e}`);
+    for (const e of s.effects) caps.add(e.effect);
+    for (const c of Object.values(s.checks)) {
+      const kind = getCheck(c.kind);
+      if (kind?.tier === 1) caps.add("script");
+      if (kind?.modelBacked) caps.add("model");
+    }
+  }
+  return [...caps].sort();
+}
+
+/** Inject/notify-only plugins without scripts can be auto-trusted when the user allows it. */
+export function isDeclarativeOnly(capabilities: string[]): boolean {
+  return !capabilities.some((c) => c === "block" || c === "script");
+}

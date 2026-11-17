@@ -1,0 +1,6 @@
+# Wait a week before installing a newly published version (supply-chain cooling-off).
+minimumReleaseAge: 10080
+# esbuild's postinstall only checks its platform binary; biome ships prebuilt binaries.
+allowBuilds:
+  esbuild: true
+  "@biomejs/biome": false
