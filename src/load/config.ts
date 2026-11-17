@@ -67,6 +67,7 @@ export function readConfig(file: string): HubConfig {
       ...(typeof t.model === "string" ? { model: t.model } : {}),
       ...(typeof t.timeout_ms === "number" ? { timeoutMs: t.timeout_ms } : {}),
       ...(typeof t.api_key_env === "string" ? { apiKeyEnv: t.api_key_env } : {}),
+      ...(typeof t.allow_remote === "boolean" ? { allowRemote: t.allow_remote } : {}),
     };
   }
   for (const [id, o] of Object.entries(table(raw.override))) config.overrides[id] = table(o);

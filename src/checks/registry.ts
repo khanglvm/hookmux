@@ -32,6 +32,8 @@ export interface ProviderSettings {
   timeoutMs?: number;
   /** Name of an environment variable that holds the API key; the key itself is never stored. */
   apiKeyEnv?: string;
+  /** Lets prompts reach a provider that is not on loopback. Off by default, so text stays on the machine. */
+  allowRemote?: boolean;
 }
 
 export interface CheckKind {
