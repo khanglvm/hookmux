@@ -8,6 +8,7 @@ import { join, relative } from "node:path";
 import type { HomePaths } from "../runtime/paths.ts";
 import { VERSION } from "../version.ts";
 import { readConfig } from "./config.ts";
+import { applyFlags, type PluginFlags, readFlags } from "./flags.ts";
 import { compileManifest, MANIFEST_FILE, ManifestError, PLUGIN_ID, readManifest } from "./manifest.ts";
 import {
   KNOWN_HOSTS,
@@ -22,7 +23,8 @@ import { capabilitiesOf, hashPlugin, isDeclarativeOnly, listPluginFiles, readTru
 export function compileRegistry(paths: HomePaths): Registry {
   const config = readConfig(paths.config);
   const trust = readTrust(paths.trust);
-  const sources: SourceStamp[] = [stamp(paths.config), stamp(paths.trust), stamp(paths.plugins)];
+  const flags = readFlags(paths.flags);
+  const sources: SourceStamp[] = [stamp(paths.config), stamp(paths.trust), stamp(paths.flags), stamp(paths.plugins)];
   const plugins: RegistryPlugin[] = [];
 
   const ids = existsSync(paths.plugins)
@@ -33,7 +35,7 @@ export function compileRegistry(paths: HomePaths): Registry {
     : [];
   for (const id of ids) {
     const dir = join(paths.plugins, id);
-    plugins.push(compileOne(id, dir, config, trust.plugins[id]?.hash, sources));
+    plugins.push(compileOne(id, dir, config, flags, trust.plugins[id]?.hash, sources));
   }
   return {
     format: REGISTRY_FORMAT,
@@ -51,6 +53,7 @@ function compileOne(
   id: string,
   dir: string,
   config: ReturnType<typeof readConfig>,
+  flags: PluginFlags,
   pinned: string | undefined,
   sources: SourceStamp[],
 ): RegistryPlugin {
@@ -79,8 +82,11 @@ function compileOne(
       return entry;
     }
     entry.status = "active";
-    entry.base = compiled.base;
-    entry.variants = compiled.variants;
+    // Hub flags come last, after the user's overrides, so `disable` and `--shadow` always hold.
+    entry.base = applyFlags(compiled.base, flags);
+    entry.variants = Object.fromEntries(
+      Object.entries(compiled.variants).map(([host, spec]) => [host, applyFlags(spec, flags)]),
+    );
   } catch (error) {
     entry.problem = error instanceof ManifestError ? error.problems.join("; ") : (error as Error).message;
     if (!existsSync(join(dir, MANIFEST_FILE))) entry.problem = `no ${MANIFEST_FILE}`;

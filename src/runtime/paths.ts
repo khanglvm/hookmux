@@ -19,6 +19,14 @@ export interface HomePaths {
   logFile: string;
   logSettings: string;
   health: string;
+  /** Hub-owned shadow and disabled lists, applied after user overrides. */
+  flags: string;
+  /** Where each installed plugin came from (`hookmux add`). */
+  sources: string;
+  /** Install settings that `sync` reuses, such as the host timeout. */
+  installState: string;
+  /** Scratch space on the same filesystem as plugins/, so staged copies can be renamed into place. */
+  staging: string;
 }
 
 export function homePaths(root = process.env.HOOKMUX_HOME || join(homedir(), ".hookmux")): HomePaths {
@@ -37,5 +45,9 @@ export function homePaths(root = process.env.HOOKMUX_HOME || join(homedir(), ".h
     logFile: join(root, "logs", "hookmux.log"),
     logSettings: join(root, "logs", "settings.json"),
     health: join(root, "state", "health.json"),
+    flags: join(root, "flags.json"),
+    sources: join(root, "sources.json"),
+    installState: join(root, "install.json"),
+    staging: join(root, "tmp"),
   };
 }

@@ -25,7 +25,8 @@ const MAX_TEXT_CHARS = 4000;
 export const PLUGIN_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const ORIGINS: readonly Origin[] = ["user", "system", "unknown"];
 
-const KNOWN_KEYS = new Set([
+/** Top-level manifest keys; `hookmux schema` documents each one. */
+export const KNOWN_KEYS: ReadonlySet<string> = new Set([
   "schema",
   "id",
   "version",
