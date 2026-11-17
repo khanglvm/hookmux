@@ -17,6 +17,11 @@ export interface JsonHookLayout {
   handler(command: string, timeoutSec: number, event: CanonicalEvent): Record<string, unknown>;
   /** Matcher to set on the group for this event, or undefined for none. */
   matcher?(event: CanonicalEvent): string | undefined;
+  /**
+   * Validates the whole parsed file before anything is changed. Throws
+   * ConfigEditError when the host could not load the file as it stands.
+   */
+  checkRoot?(config: Record<string, unknown>, file: string): void;
 }
 
 type Json = Record<string, unknown>;
@@ -40,6 +45,13 @@ function readConfigJson(file: string): Json {
   return parsed as Json;
 }
 
+/** Reads the config and runs the layout's root check, so no caller can skip it. */
+function readChecked(file: string, layout: JsonHookLayout): Json {
+  const config = readConfigJson(file);
+  layout.checkRoot?.(config, file);
+  return config;
+}
+
 function hookTable(config: Json): Record<string, Group[]> {
   const hooks = config.hooks;
   if (hooks === undefined) return {};
@@ -56,7 +68,7 @@ function groupHasHub(group: Group, launcher: string): boolean {
 export function installedEvents(file: string, launcher: string, layout: JsonHookLayout): CanonicalEvent[] {
   let hooks: Record<string, Group[]>;
   try {
-    hooks = hookTable(readConfigJson(file));
+    hooks = hookTable(readChecked(file, layout));
   } catch {
     return [];
   }
@@ -79,7 +91,7 @@ function save(file: string, config: Json, change: ConfigChange): void {
 }
 
 export function installEntries(file: string, entry: HubEntry, layout: JsonHookLayout): ConfigChange {
-  const config = readConfigJson(file);
+  const config = readChecked(file, layout);
   const hooks = hookTable(config);
   const change: ConfigChange = { file, changed: false, added: [], removed: [], notes: [] };
   for (const event of entry.events) {
@@ -107,7 +119,7 @@ export function installEntries(file: string, entry: HubEntry, layout: JsonHookLa
 export function uninstallEntries(file: string, launcher: string, layout: JsonHookLayout): ConfigChange {
   const change: ConfigChange = { file, changed: false, added: [], removed: [], notes: [] };
   if (!existsSync(file)) return change;
-  const config = readConfigJson(file);
+  const config = readChecked(file, layout);
   const hooks = hookTable(config);
   for (const [canonical, native] of Object.entries(layout.nativeEvents) as [CanonicalEvent, string | null][]) {
     if (!native || !Array.isArray(hooks[native])) continue;

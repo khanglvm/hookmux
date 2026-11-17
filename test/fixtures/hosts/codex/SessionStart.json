@@ -1,0 +1,9 @@
+{
+  "session_id": "0197e2b4-7a3c-7d10-9c1e-5f3a2b6d8e41",
+  "transcript_path": null,
+  "cwd": "/Users/me/proj",
+  "hook_event_name": "SessionStart",
+  "model": "gpt-5.4",
+  "permission_mode": "default",
+  "source": "startup"
+}

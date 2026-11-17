@@ -1,0 +1,12 @@
+{
+  "session_id": "0197e2b4-7a3c-7d10-9c1e-5f3a2b6d8e41",
+  "turn_id": "turn-1b2c",
+  "agent_id": "0197e2b4-9d00-7a11-8c2e-aa55bb66cc77",
+  "agent_type": "worker",
+  "transcript_path": null,
+  "cwd": "/Users/me/proj",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "gpt-5.4",
+  "permission_mode": "default",
+  "prompt": "run the unit tests and report failures"
+}

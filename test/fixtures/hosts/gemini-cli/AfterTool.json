@@ -1,0 +1,13 @@
+{
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "",
+  "cwd": "/work/proj",
+  "hook_event_name": "AfterTool",
+  "timestamp": "2026-11-17T12:00:02.000Z",
+  "tool_name": "write_file",
+  "tool_input": { "file_path": "/work/proj/a.txt", "content": "hi" },
+  "tool_response": {
+    "llmContent": "Successfully created and wrote to new file: /work/proj/a.txt.",
+    "returnDisplay": "a.txt"
+  }
+}

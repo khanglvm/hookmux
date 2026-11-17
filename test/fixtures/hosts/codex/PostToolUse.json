@@ -1,0 +1,13 @@
+{
+  "session_id": "0197e2b4-7a3c-7d10-9c1e-5f3a2b6d8e41",
+  "turn_id": "turn-0f3a",
+  "transcript_path": "/Users/me/.codex/sessions/2026/11/17/rollout-2026-11-17T09-00-00-0197e2b4.jsonl",
+  "cwd": "/Users/me/proj",
+  "hook_event_name": "PostToolUse",
+  "model": "gpt-5.4",
+  "permission_mode": "default",
+  "tool_name": "mcp__github__get_issue",
+  "tool_input": { "owner": "me", "repo": "proj", "issue_number": 7 },
+  "tool_response": { "content": [{ "type": "text", "text": "Issue 7" }] },
+  "tool_use_id": "call_5eF6zS"
+}

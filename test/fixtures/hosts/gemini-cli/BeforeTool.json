@@ -1,0 +1,9 @@
+{
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "/home/u/.gemini/tmp/x/chats/session-2026-11-17T12-00-ab12cd34.jsonl",
+  "cwd": "/work/proj",
+  "hook_event_name": "BeforeTool",
+  "timestamp": "2026-11-17T12:00:01.000Z",
+  "tool_name": "run_shell_command",
+  "tool_input": { "command": "git status", "description": "show status" }
+}

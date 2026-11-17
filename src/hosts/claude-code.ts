@@ -8,8 +8,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { joinContext } from "../core/compose.ts";
 import type { CanonicalEvent, EffectKind, HookEvent, HubResult, Origin } from "../core/types.ts";
+import { type HostIdentity, parseHostPayload } from "./event.ts";
 import { installEntries, installedEvents, type JsonHookLayout, uninstallEntries } from "./json-config.ts";
-import { asRecord, str } from "./payload.ts";
 import type { HostAdapter } from "./types.ts";
 
 const ID = "claude-code";
@@ -53,41 +53,23 @@ function originOf(prompt: string | undefined): Origin {
   return SYSTEM_PROMPT_PREFIXES.some((p) => head.startsWith(p)) ? "system" : "user";
 }
 
-export const claudeCode: HostAdapter = {
+const HOST: HostIdentity = {
   id: ID,
   name: "Claude Code",
-  contractVersion: 1,
   nativeEvents: NATIVE,
   supports: SUPPORTS,
   contextChars: CONTEXT_CHARS,
+};
+
+export const claudeCode: HostAdapter = {
+  ...HOST,
+  contractVersion: 1,
 
   parse(event, payload) {
-    const p = asRecord(payload);
-    if (!p) return null;
-    const prompt = str(p.prompt);
-    const toolName = str(p.tool_name);
-    const parsed: HookEvent = {
-      name: event,
-      host: {
-        id: ID,
-        name: "Claude Code",
-        version: null,
-        adapterContract: 1,
-        nativeEvent: str(p.hook_event_name) ?? (NATIVE[event] as string),
-        canonicalEvent: event,
-        supports: SUPPORTS[event],
-        limits: { contextChars: CONTEXT_CHARS },
-      },
-      sessionId: str(p.session_id) ?? "",
-      cwd: str(p.cwd) ?? process.cwd(),
-      origin: event === "prompt.submit" ? originOf(prompt) : "unknown",
-      raw: payload,
-    };
-    if (prompt !== undefined) parsed.prompt = prompt;
-    if (toolName !== undefined) parsed.tool = { name: toolName, canonicalName: toolName, input: p.tool_input };
-    const source = str(p.source);
-    if (source !== undefined) parsed.source = source;
-    return parsed;
+    return parseHostPayload(HOST, event, payload, {
+      promptOrigin: (_payload, prompt) => originOf(prompt),
+      canonicalTool: (name) => name,
+    });
   },
 
   render(result: HubResult, event: HookEvent): string {
