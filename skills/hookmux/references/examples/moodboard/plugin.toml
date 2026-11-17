@@ -1,0 +1,72 @@
+# Suggests a moodboard skill for open-ended UI design requests, in English and
+# Vietnamese. Rules only: two of three signal groups must match, and common
+# "not design work" phrases (bugs, a supplied mockup) exempt the prompt.
+schema = 1
+id = "moodboard"
+version = "1.0.0"
+description = "Suggest the moodboard skill when a prompt asks for new or restyled UI."
+events = ["prompt.submit"]
+phase = "route"
+priority = 50
+dedupe = "session"
+when = "design_words and not exempt"
+
+[checks.design_words]
+kind = "regex_groups"
+fire_when = [["act", "surface"], ["feel", "surface"], ["act", "feel"]]
+
+[checks.design_words.groups]
+act = [
+  '\b(re-?)?design(ing|ed|s)?\b',
+  '\brevamp',
+  '\bre-?style',
+  '\bface-?lift',
+  '\bmake (it|this|that|the \w+|our \w+) (look|feel)',
+  '\b(polish|beautify|modernize|modernise|refresh|overhaul|rework)\b',
+  '\bnew look\b',
+  '\b(prettier|nicer|more (beautiful|premium|modern|polished))\b',
+  '\b(build|create|make|start) (a |an |the |our |my )?(new )?(landing|website|web ?site|home ?page|page|dashboard|screen|app|portfolio|ui)\b',
+  'thiết kế',
+  'làm (lại|mới)',
+  'đẹp hơn',
+  '(chỉnh|nâng cấp|đổi) giao diện',
+  'trông (đẹp|hiện đại|chuyên nghiệp|sang)',
+  '\b(tạo|làm|dựng|xây)( (một|cái|lại|mới))? (website|web|trang|landing|giao diện|ứng dụng|app|dashboard|portfolio)',
+]
+surface = [
+  '\b(ui|ux|interface|page|landing|website|web ?site|site|dashboard|screen|app|home ?page|hero|onboarding|component|layout|portfolio|navbar|sidebar|modal|card)s?\b',
+  'giao diện',
+  '\btrang\b',
+  'màn hình',
+  'ứng dụng',
+  '\bweb\b',
+]
+feel = [
+  '\b(look|feel|vibe|style|aesthetic|visual|typography|palette|branding|mood|theme)s?\b',
+  '\b(modern|premium|minimal|clean|elegant|playful|bold|sleek|calm|luxur\w*|outdated|dated|boring|ugly|generic)\b',
+  'phong cách',
+  'cảm giác',
+  'màu sắc',
+  'hiện đại',
+  'sang trọng',
+  'đẹp',
+  'xấu',
+  'nhàm',
+]
+
+[checks.exempt]
+kind = "regex"
+patterns = [
+  'figma\.com/',
+  '\bmatch (this|the|my) (mockup|design|figma|screenshot)',
+  '\b(bug|crash|stack ?trace|traceback|typo|failing test|unit tests?)\b',
+  '\bfix(es|ed|ing)?\b',
+  'sửa lỗi',
+  '\bmoodboard\b',
+  "\\b(broken|not working|doesn'?t work|regression)\\b",
+  'bị lỗi',
+]
+
+[[then]]
+effect = "inject"
+text = "This request may be open-ended design work. If the visual direction is not already fixed (no supplied mockup, Figma file or design doc to follow) and it is more than a small fix, load the `moodboard` skill and start at its first step. Ignore this when a moodboard is already under way or the fit is wrong."

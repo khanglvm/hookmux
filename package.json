@@ -35,7 +35,9 @@
   },
   "packageManager": "pnpm@12.15.0",
   "scripts": {
-    "build": "node scripts/build.ts",
+    "build": "pnpm run gen:refs && node scripts/build.ts",
+    "gen:refs": "node scripts/gen-skill-refs.ts",
+    "smoke": "sh scripts/smoke-launcher.sh",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",

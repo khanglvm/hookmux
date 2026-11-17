@@ -1,0 +1,65 @@
+# Points the agent at the `hookmux` authoring skill when a prompt asks for an
+# automatic behaviour: an explicit "make a hook" request, or a standing rule
+# such as "whenever I ... remind me". Rules only. Prompts about code hooks
+# (React hooks, git hooks, webhooks) are exempt, because "hook" there means
+# something else.
+schema = 1
+id = "hookmux-authoring"
+version = "1.0.0"
+description = "Suggest the hookmux skill when a prompt asks for a hook or a standing automatic rule."
+events = ["prompt.submit"]
+phase = "route"
+priority = 60
+dedupe = "session"
+when = "(asks_for_hook or standing_rule) and not code_hook and not hook_function_name"
+
+# An explicit request to build a hook. "webhook" never matches, because the
+# word before "hook" must be an article, "new" or "hookmux".
+[checks.asks_for_hook]
+kind = "regex"
+patterns = [
+  '\b(make|create|add|set ?up|write|build|need|want)\s+(me\s+)?(a|an|one|another|some|new)\s+(new\s+)?(hookmux\s+)?hooks?\b',
+  '\bhookmux (hook|plugin)s?\b',
+  '(tạo|thêm|viết|làm|cài|thiết lập|dựng)( (một|cái|1))? hook',
+]
+
+# A standing rule, in either order: a "whenever / every time" clause and then
+# an imperative directive ("..., warn me"), or "remind me ... whenever I ...".
+# The order is the signal: "tell me why it fails every time I push" and "why
+# does eslint warn every time I save" are bug reports, not rules. Bare verbs
+# only, so "warns", "warning" and "blocks" never count.
+[checks.standing_rule]
+kind = "regex"
+patterns = [
+  '\b(whenever|every ?time|each time|any ?time)\s+(I|you|we)\b[^,.?!]{0,100},\s*(please\s+|then\s+|always\s+)?(remind|warn|block|suggest|alert|notify|nudge|tell me|ask me)\b',
+  '\b(remind|warn|alert|notify|nudge) me\b[^.?!]{0,100}\b(whenever|every ?time|each time|any ?time)\s+(I|we)\b',
+  '(mỗi (khi|lần)|bất (cứ|kỳ) (khi|lúc) nào|hễ)[^,.?!]{0,100}(,|\sthì)\s*(hãy\s+)?(nhắc|cảnh báo|chặn|gợi ý|đề xuất)',
+  '(nhắc|cảnh báo|chặn|gợi ý cho) tôi[^.?!]{0,100}(mỗi (khi|lần)|bất (cứ|kỳ) (khi|lúc) nào)',
+]
+
+# Other meanings of "hook", plus Vietnamese "it shows a warning" bug reports.
+[checks.code_hook]
+kind = "regex"
+patterns = [
+  '\breact hooks?\b',
+  '\bcustom hooks?\b',
+  '\blifecycle hooks?\b',
+  '\bhooks? (in|for|of) (react|vue|preact|solid|svelte|angular|wordpress|webpack|vite|pytest)\b',
+  '\b(git|pre-?commit|pre-?push|commit-msg|post-?commit|post-?merge|post-?checkout|husky)\s+hooks?\b',
+  '\.git/hooks',
+  '\b(husky|lefthook)\b',
+  '\bwebhooks?\b',
+  'hook react',
+  '(hiện|hiển thị|bị|ra|có|nó) cảnh báo',
+]
+
+# React-style hook names (useEffect, useDebounce). Case-sensitive, so "user"
+# and "used" do not match.
+[checks.hook_function_name]
+kind = "regex"
+flags = "u"
+patterns = ['\buse[A-Z][A-Za-z0-9]*']
+
+[[then]]
+effect = "inject"
+text = "The user may be asking for an automatic behaviour, which hookmux builds as a plugin. If so, load the `hookmux` skill and follow its workflow. Ignore this when the request is about code hooks (React hooks, git hooks, webhooks) or the skill is already loaded."
