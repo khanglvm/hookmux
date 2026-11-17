@@ -11,8 +11,9 @@ exec 2>/dev/null
 
 NODE='@NODE@'
 ENGINE='@ROOT@/engine/current/hook.mjs'
-# Seconds before the watchdog stops the engine. The engine's own deadline is
-# shorter; this bounds a run that cannot reach its deadline at all.
+# Seconds before the watchdog stops the engine. It bounds a run that cannot
+# reach its own deadline (2 s by default). deadline_ms may be set higher, up to
+# 20 s, but a run past this limit still ends here with no output.
 WATCHDOG_SEC=5
 
 # Nothing to run: return at once and leave stdin unread, so a client that keeps

@@ -1,11 +1,11 @@
 // Private, content-addressed copies of verified scripts. The script check
 // hashes the plugin's file and then runs this copy, named by that hash, so an
 // edit to the plugin file between the hash check and the exec cannot change
-// what runs. Copies live in ~/.hookmux/cache/scripts (mode 0700) and are
-// written once, atomically, then reused by every later run.
+// what runs. Copies live in ~/.hookmux/cache/scripts (mode 0700), are written
+// atomically, and are re-hashed before each reuse.
 
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeFileAtomic } from "../runtime/fsutil.ts";
 import { homePaths } from "../runtime/paths.ts";
@@ -24,6 +24,15 @@ export function sha256Hex(bytes: Buffer): string {
  */
 export function cachedScript(bytes: Buffer, sha256: string, root = homePaths().root): string {
   const file = join(root, "cache", "scripts", sha256);
-  if (!existsSync(file)) writeFileAtomic(file, bytes, SCRIPT_MODE);
+  // The name alone proves nothing: a copy that was edited or planted is replaced.
+  if (cachedHash(file) !== sha256) writeFileAtomic(file, bytes, SCRIPT_MODE);
   return file;
+}
+
+function cachedHash(file: string): string | undefined {
+  try {
+    return sha256Hex(readFileSync(file));
+  } catch {
+    return undefined;
+  }
 }

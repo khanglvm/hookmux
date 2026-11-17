@@ -152,7 +152,7 @@ This is also why the order of terms does not matter. `cheap and costly` and `cos
 
 When `when` is true the plugin fires, and when it is false the plugin stays silent. When it stays unknown, the engine evaluates `when_degraded`. If that is unknown too, or missing, the plugin contributes nothing. A failed check never makes a plugin fire, so an error can never block the agent. A plugin that adds a model check should set `when_degraded` to a rules-only expression, or to `"false"` to stay quiet when the model is unavailable.
 
-All checks share one deadline, `deadline_ms` (2,000 ms by default). Checks still running at the deadline become unknown.
+All checks share one deadline, `deadline_ms` (2,000 ms by default). Checks still running at the deadline become unknown. The launcher stops any hook run after 5 seconds and passes nothing on, so keep `deadline_ms` well under that; a longer deadline only lets a slow check end the run with no output.
 
 ## Phases and order
 

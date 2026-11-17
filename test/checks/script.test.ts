@@ -193,6 +193,24 @@ test("the verified bytes run from a private content-addressed copy", async () =>
   assert.equal(statSync(copy).mode & 0o777, 0o700);
   assert.equal(statSync(dirname(copy)).mode & 0o777, 0o700);
 });
+
+test("a cached copy that no longer matches its hash is replaced before it runs", async () => {
+  const body = sh(`printf genuine > "$1"`);
+  const f = fixture({ "say.sh": body });
+  const out = join(f.scratch, "said.txt");
+  assert.equal((await f.run({ command: "say.sh", args: [out] })).value, true);
+  const copy = join(
+    process.env.HOOKMUX_HOME as string,
+    "cache",
+    "scripts",
+    createHash("sha256").update(body).digest("hex"),
+  );
+  writeFileSync(copy, sh(`printf planted > "$1"`), { mode: 0o700 });
+  assert.equal((await f.run({ command: "say.sh", args: [out] })).value, true);
+  assert.equal(readFileSync(out, "utf8"), "genuine");
+  assert.equal(readFileSync(copy, "utf8"), body);
+});
+
 test("no time left means the script never starts", async () => {
   const f = fixture({ "mark.sh": sh(`touch "$1"`) });
   const marker = join(f.scratch, "ran");
