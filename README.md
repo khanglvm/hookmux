@@ -80,6 +80,8 @@ Effects each client supports per event:
 | Host        | `prompt.submit`       | `session.start` | `tool.before`         | `tool.after`          |
 | ----------- | --------------------- | --------------- | --------------------- | --------------------- |
 | Claude Code | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |
+| Codex       | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |
+| Gemini CLI  | inject, block, notify | inject, notify  | block, notify         | inject, block, notify |
 <!-- hosts:end -->
 
 Notes on each client, including the Codex and Gemini CLI adapters, are in [docs/hosts.md](docs/hosts.md). On Codex, every new or changed hook entry must be approved once in its `/hooks` screen before it runs.

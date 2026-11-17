@@ -267,6 +267,7 @@ export function interpretResult(result: ProcessResult, output: ScriptOutput): Si
 
 registerCheck({
   kind: "script",
+  outputOf: (spec) => (spec.output === "score" ? "score" : "bool"),
   summary: "Runs an executable from the plugin folder; it reads the event as JSON on stdin and prints its value.",
   options: {
     command: "path relative to the plugin folder, executable with a shebang",

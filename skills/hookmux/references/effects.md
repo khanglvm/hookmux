@@ -15,3 +15,5 @@ A plugin lists its effects as `[[then]]` tables with an `effect` key.
 | Host        | `prompt.submit`       | `session.start` | `tool.before`         | `tool.after`          |
 | ----------- | --------------------- | --------------- | --------------------- | --------------------- |
 | Claude Code | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |
+| Codex       | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |
+| Gemini CLI  | inject, block, notify | inject, notify  | block, notify         | inject, block, notify |

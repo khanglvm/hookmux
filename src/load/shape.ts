@@ -20,7 +20,8 @@ export function evalExprShape(label: string, source: string, checks: Record<stri
         problems.push(`${label}: '${e.name}' is not a declared check`);
         return;
       }
-      const output = getCheck(spec.kind)?.output;
+      const kind = getCheck(spec.kind);
+      const output = kind?.outputOf?.(spec) ?? kind?.output;
       if (e.t === "ref" && output === "score")
         problems.push(`${label}: '${e.name}' is a score; compare it, e.g. ${e.name} >= 0.7`);
       if (e.t === "cmp" && output === "bool")

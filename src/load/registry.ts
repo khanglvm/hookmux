@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import type { PluginSpec } from "../core/types.ts";
 import type { HomePaths } from "../runtime/paths.ts";
 import { VERSION } from "../version.ts";
 import { readConfig } from "./config.ts";
@@ -76,17 +77,25 @@ function compileOne(
       listing.files.map((f) => [relative(dir, f), createHash("sha256").update(readFileSync(f)).digest("hex")]),
     );
     const autoTrusted = config.settings.autoTrustDeclarative && isDeclarativeOnly(entry.capabilities);
-    if (pinned !== entry.hash && !autoTrusted) {
+    const trusted = pinned === entry.hash || autoTrusted;
+    // An unpromoted plugin flagged shadow (`add --shadow`) may run in shadow mode so its
+    // decisions show in the log before anyone approves it. It never reaches the agent,
+    // and plugins with scripts stay off entirely, because that would run unreviewed code.
+    const shadowPreview = !trusted && flags.shadow.includes(id) && !entry.capabilities.includes("script");
+    if (!trusted && !shadowPreview) {
       entry.status = "untrusted";
       entry.problem = pinned ? "content changed since promote" : "not promoted yet";
       return entry;
     }
     entry.status = "active";
+    if (shadowPreview) entry.problem = "not promoted yet; running in shadow only";
     // Hub flags come last, after the user's overrides, so `disable` and `--shadow` always hold.
-    entry.base = applyFlags(compiled.base, flags);
-    entry.variants = Object.fromEntries(
-      Object.entries(compiled.variants).map(([host, spec]) => [host, applyFlags(spec, flags)]),
-    );
+    const finish = (spec: PluginSpec) => {
+      const flagged = applyFlags(spec, flags);
+      return shadowPreview ? { ...flagged, shadow: true } : flagged;
+    };
+    entry.base = finish(compiled.base);
+    entry.variants = Object.fromEntries(Object.entries(compiled.variants).map(([host, spec]) => [host, finish(spec)]));
   } catch (error) {
     entry.problem = error instanceof ManifestError ? error.problems.join("; ") : (error as Error).message;
     if (!existsSync(join(dir, MANIFEST_FILE))) entry.problem = `no ${MANIFEST_FILE}`;

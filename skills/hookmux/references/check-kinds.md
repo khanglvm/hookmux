@@ -6,6 +6,7 @@ Each check in `[checks.<name>]` names one of these kinds. Cheaper tiers run firs
 
 | Kind           | Tier           | Output | Model-backed |
 | -------------- | -------------- | ------ | ------------ |
+| `classify`     | 2 (model call) | score  | yes          |
 | `cwd_glob`     | 0 (in-process) | bool   | no           |
 | `host`         | 0 (in-process) | bool   | no           |
 | `keywords`     | 0 (in-process) | bool   | no           |
@@ -13,7 +14,21 @@ Each check in `[checks.<name>]` names one of these kinds. Cheaper tiers run firs
 | `path_exists`  | 0 (in-process) | bool   | no           |
 | `regex`        | 0 (in-process) | bool   | no           |
 | `regex_groups` | 0 (in-process) | bool   | no           |
+| `script`       | 1 (subprocess) | bool   | no           |
 | `tool`         | 0 (in-process) | bool   | no           |
+
+## `classify`
+
+Score from 0 to 1 that the field is the target label, decided by a configured model provider.
+
+| Option         | Meaning                                                 |
+| -------------- | ------------------------------------------------------- |
+| `provider`     | name of a [providers.<name>] table in config.toml       |
+| `labels`       | list of 2 to 20 labels                                  |
+| `target`       | the label to score                                      |
+| `instructions` | what the labels mean, at most 2000 chars                |
+| `field`        | event field to read, default "prompt"                   |
+| `max_chars`    | characters of the field sent to the model, default 2000 |
 
 ## `cwd_glob`
 
@@ -83,6 +98,18 @@ Named groups of patterns; true when every group in at least one fire_when combin
 | `fire_when` | list of group-name lists              |
 | `flags`     | subset of "imsu", default "iu"        |
 | `field`     | event field to read, default "prompt" |
+
+## `script`
+
+Runs an executable from the plugin folder; it reads the event as JSON on stdin and prints its value.
+
+| Option       | Meaning                                                       |
+| ------------ | ------------------------------------------------------------- |
+| `command`    | path relative to the plugin folder, executable with a shebang |
+| `args`       | list of string arguments                                      |
+| `timeout_ms` | default 1000, at most 10000                                   |
+| `needs_raw`  | default false; true also sends the host's original payload    |
+| `output`     | "bool" (default) or "score"                                   |
 
 ## `tool`
 

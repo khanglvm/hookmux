@@ -44,6 +44,8 @@ export interface CheckKind {
   options: Record<string, string>;
   tier: Tier;
   output: "bool" | "score";
+  /** Per-spec output type, for kinds where an option decides it (e.g. script `output = "score"`). */
+  outputOf?(spec: CheckSpec): "bool" | "score";
   /** True when a model decides the value. Model-backed checks cannot justify a block on their own. */
   modelBacked: boolean;
   /** Returns human-readable problems; empty means valid. */

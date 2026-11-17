@@ -14,3 +14,25 @@ Context limit: 10000 characters.
 | `session.start` | `SessionStart`     | inject, notify        |
 | `tool.before`   | `PreToolUse`       | inject, block, notify |
 | `tool.after`    | `PostToolUse`      | inject, block, notify |
+
+## Codex (`codex`)
+
+Context limit: 10000 characters.
+
+| Canonical event | Native event       | Effects               |
+| --------------- | ------------------ | --------------------- |
+| `prompt.submit` | `UserPromptSubmit` | inject, block, notify |
+| `session.start` | `SessionStart`     | inject, notify        |
+| `tool.before`   | `PreToolUse`       | inject, block, notify |
+| `tool.after`    | `PostToolUse`      | inject, block, notify |
+
+## Gemini CLI (`gemini-cli`)
+
+Context limit: 10000 characters.
+
+| Canonical event | Native event   | Effects               |
+| --------------- | -------------- | --------------------- |
+| `prompt.submit` | `BeforeAgent`  | inject, block, notify |
+| `session.start` | `SessionStart` | inject, notify        |
+| `tool.before`   | `BeforeTool`   | block, notify         |
+| `tool.after`    | `AfterTool`    | inject, block, notify |

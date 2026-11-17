@@ -1,5 +1,4 @@
 ---
-
 name: hookmux
 description: Builds hookmux plugins, which make Claude Code, Codex or Gemini CLI act on their own when a prompt or tool call matches. Use when the user asks to make, create, add or set up a hook; states a standing rule ("whenever I … remind/warn/block/suggest …", "every time I …"); or writes it in Vietnamese ("tạo hook", "mỗi khi tôi …", "bất cứ khi nào …"). Code hooks (React hooks, git hooks, webhooks) are a different subject.
 ---
