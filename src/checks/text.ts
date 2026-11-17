@@ -3,6 +3,7 @@
 // huge prompt or tool payload (JavaScript regexes backtrack; there is no RE2 here).
 
 import type { HookEvent } from "../core/types.ts";
+import { hasNestedRepetition } from "./redos.ts";
 
 /** Characters of input a pattern check sees. Longer input is cut, not rejected. */
 export const MAX_MATCH_CHARS = 8000;
@@ -65,6 +66,14 @@ export function compilePatterns(raw: unknown, flags: string, label: string, prob
     }
     if (source.length > MAX_PATTERN_CHARS) {
       problems.push(`${label} pattern longer than ${MAX_PATTERN_CHARS} chars`);
+      continue;
+    }
+    // A heuristic for catastrophic backtracking; the launcher's watchdog is what
+    // actually bounds a hook run that a slow pattern stalls.
+    if (hasNestedRepetition(source)) {
+      problems.push(
+        `${label} pattern /${source}/ repeats a group that already repeats (like (a+)+), which can hang on some input; rewrite it without the nesting`,
+      );
       continue;
     }
     try {

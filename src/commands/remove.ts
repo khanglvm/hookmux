@@ -2,7 +2,7 @@
 
 import { existsSync, rmSync } from "node:fs";
 import { readSources, writeSources } from "../install/records.ts";
-import { readFlags, writeFlags } from "../load/flags.ts";
+import { readFlagsForUpdate, writeFlags } from "../load/flags.ts";
 import { readTrust, writeTrust } from "../load/trust.ts";
 import { homePaths } from "../runtime/paths.ts";
 import { parseCommand, UsageError } from "./lib/args.ts";
@@ -22,7 +22,7 @@ export async function run(argv: string[]): Promise<number> {
   const paths = homePaths();
   const dir = installedDir(paths, id);
   const trust = readTrust(paths.trust);
-  const flags = readFlags(paths.flags);
+  const flags = readFlagsForUpdate(paths.flags);
   const sources = readSources(paths.sources);
   const known = existsSync(dir) || trust.plugins[id] || sources[id];
   if (!known) {

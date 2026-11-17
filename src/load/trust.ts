@@ -24,7 +24,13 @@ export interface TrustStore {
 
 export function readTrust(file: string): TrustStore {
   const store = readJson<TrustStore>(file, { plugins: {} });
-  return store && typeof store.plugins === "object" ? store : { plugins: {} };
+  if (!store || typeof store.plugins !== "object" || store.plugins === null) return { plugins: {} };
+  // An entry without a capability list approves nothing beyond its hash, so overrides
+  // that add any capability send the plugin back to promote.
+  for (const entry of Object.values(store.plugins)) {
+    if (entry && !Array.isArray(entry.capabilities)) entry.capabilities = [];
+  }
+  return store;
 }
 
 export function writeTrust(file: string, store: TrustStore): void {
@@ -52,25 +58,53 @@ export function listPluginFiles(dir: string): { files: string[]; dirs: string[] 
   return { files, dirs };
 }
 
+/** One plugin file read into memory, so its hash and its parsed content come from the same bytes. */
+export interface PluginFile {
+  /** Path relative to the plugin folder, with forward slashes. */
+  rel: string;
+  bytes: Buffer;
+}
+
+/**
+ * Reads every plugin file once, in sorted order.
+ * @throws Error for links, too many files or a folder over MAX_PLUGIN_BYTES.
+ */
+export function readPluginFiles(dir: string): { files: PluginFile[]; dirs: string[]; paths: string[] } {
+  const listing = listPluginFiles(dir);
+  const files: PluginFile[] = [];
+  let total = 0;
+  for (const file of listing.files) {
+    // Checked before reading so a huge file is refused without loading it.
+    total += lstatSync(file).size;
+    if (total > MAX_PLUGIN_BYTES) throw new Error(`plugin folder is larger than ${MAX_PLUGIN_BYTES} bytes`);
+    files.push({ rel: relative(dir, file).replaceAll("\\", "/"), bytes: readFileSync(file) });
+  }
+  return { files, dirs: listing.dirs, paths: listing.files };
+}
+
 /**
  * Hash over each file's relative path, byte length and bytes, in sorted order:
  * `path \0 length \0 content`, the shape used by the skills CLI lockfile.
  */
-export function hashPlugin(dir: string): string {
+export function hashFiles(files: PluginFile[]): string {
   const hash = createHash("sha256");
-  let total = 0;
-  for (const file of listPluginFiles(dir).files) {
-    const size = lstatSync(file).size;
-    total += size;
-    if (total > MAX_PLUGIN_BYTES) throw new Error(`plugin folder is larger than ${MAX_PLUGIN_BYTES} bytes`);
-    const content = readFileSync(file);
-    hash.update(relative(dir, file).replaceAll("\\", "/"));
+  for (const { rel, bytes } of files) {
+    hash.update(rel);
     hash.update("\0");
-    hash.update(String(content.length));
+    hash.update(String(bytes.length));
     hash.update("\0");
-    hash.update(content);
+    hash.update(bytes);
   }
   return `sha256:${hash.digest("hex")}`;
+}
+
+/** SHA-256 per file, keyed by relative path, so a script can be re-verified right before it runs. */
+export function fileHashesOf(files: PluginFile[]): Record<string, string> {
+  return Object.fromEntries(files.map((f) => [f.rel, createHash("sha256").update(f.bytes).digest("hex")]));
+}
+
+export function hashPlugin(dir: string): string {
+  return hashFiles(readPluginFiles(dir).files);
 }
 
 /** What a plugin can do, derived from its manifest rather than from its own claims. */
@@ -86,6 +120,11 @@ export function capabilitiesOf(spec: PluginSpec, variants: PluginSpec[] = []): s
     }
   }
   return [...caps].sort();
+}
+
+/** True when every capability in `effective` was approved at promote time. */
+export function isCapabilitySubset(effective: string[], approved: string[]): boolean {
+  return effective.every((c) => approved.includes(c));
 }
 
 /** Inject/notify-only plugins without scripts can be auto-trusted when the user allows it. */

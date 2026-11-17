@@ -22,10 +22,11 @@ Kleene logic is monotone, which makes this safe: a result decided while some che
 
 A hook that breaks the agent client is worse than no hook, so every failure path ends in empty output and exit code 0, which every client reads as "no opinion":
 
-- The launcher is a few lines of POSIX shell. When Node or the engine is missing, it reads stdin and exits.
+- The launcher is a short POSIX shell script. When Node or the engine is missing, it exits at once without reading stdin.
+- The engine writes its answer to a private temp file, and the launcher prints it only when the engine exits 0, so a crash halfway through an answer prints nothing. A watchdog stops an engine still running after 5 seconds, for example one stuck on a backtracking regex.
 - The engine has its own deadline, well under the clients' timeouts. Checks still running when it passes become unknown, and the engine answers anyway. A hub that hit the client's timeout would lose every plugin's output, so it stops itself first.
 - Stdout is written before logging and bookkeeping, so neither can delay or change what the client receives.
-- An unknown signal never blocks. A guard plugin can opt into failing closed with `on_error = "block"`.
+- An unknown signal never blocks, and no setting changes that: `on_error = "block"` is rejected.
 
 ## Rules decide blocks
 
@@ -33,9 +34,9 @@ Small models misread prompts. By default a block needs a check that is not model
 
 ## Trust is a checkpoint
 
-`hookmux promote` records a hash of the plugin folder, and the engine skips any plugin whose folder no longer matches. Promote runs only on an interactive terminal, so an agent can write, test and stage a plugin in shadow mode, but making it live takes the user.
+`hookmux promote` records a hash of the plugin folder and the capabilities the plugin has with the user's overrides, and the engine skips any plugin whose folder no longer matches or whose overrides add a capability. Promote runs only on an interactive terminal, refuses `--yes`, and refuses when an agent client's environment variables are present. An agent can write, test and stage a plugin in shadow mode, but making it live takes the user typing `y`.
 
-This does not sandbox anything. An agent with full shell access as you could edit the trust file directly. What the checkpoint stops is an agent that follows an injected instruction and quietly adds code that runs on every prompt.
+A terminal is not proof of a person: an agent can open a pseudo-terminal and clear its environment. This does not sandbox anything, and an agent with full shell access as you could edit the trust file directly. What the checkpoint stops is an agent that follows an injected instruction, or a normal CLI call, and quietly turns on code that runs on every prompt. Previews follow the same line: `test` and `explain --all` leave an unpromoted plugin's scripts unrun unless the person passes `--run-scripts`.
 
 ## Adapters absorb host differences
 

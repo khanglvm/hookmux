@@ -10,8 +10,9 @@ import { readSources, writeSources } from "../install/records.ts";
 import { parseSource, SourceError } from "../install/source.ts";
 import { discardStaged, PluginExistsError, placeStaged, type StagedPlugin, stagePlugin } from "../install/stage.ts";
 import { readConfig } from "../load/config.ts";
-import { readFlags, writeFlags } from "../load/flags.ts";
+import { readFlagsForUpdate, writeFlags } from "../load/flags.ts";
 import { type HomePaths, homePaths } from "../runtime/paths.ts";
+import { agentMarker } from "./lib/agent-env.ts";
 import { parseCommand, UsageError } from "./lib/args.ts";
 import { syncAfterChange } from "./lib/hosts.ts";
 import { detail, say } from "./lib/output.ts";
@@ -66,6 +67,8 @@ export async function run(argv: string[]): Promise<number> {
     throw error;
   }
   const paths = homePaths();
+  // Fail before fetching or staging anything when flags.json cannot be updated safely.
+  readFlagsForUpdate(paths.flags);
   const fetched = await fetchSource(spec);
   let added: string[];
   let ok: boolean;
@@ -82,8 +85,10 @@ export async function run(argv: string[]): Promise<number> {
   }
   if (added.length === 0) return 1;
   if (!syncAfterChange(paths)) ok = false;
+  // Offer to promote only where promote itself would ask; elsewhere print the command.
+  const canAsk = isInteractive() && agentMarker(process.env) === undefined;
   for (const id of added) {
-    if (isInteractive()) await promotePlugin(paths, id, false);
+    if (canAsk) await promotePlugin(paths, id, false);
     else say("info", `${id} is untrusted until you promote it in your own terminal`, `hookmux promote ${id}`);
   }
   return ok ? 0 : 1;
@@ -138,7 +143,7 @@ function install(
   opts: { force: boolean; shadow: boolean },
 ): { added: string[]; ok: boolean } {
   const sources = readSources(paths.sources);
-  const flags = readFlags(paths.flags);
+  const flags = readFlagsForUpdate(paths.flags);
   const added: string[] = [];
   let ok = true;
   for (const c of candidates) {

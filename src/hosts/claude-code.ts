@@ -87,7 +87,11 @@ export const claudeCode: HostAdapter = {
       } else {
         out.decision = "block";
         out.reason = result.block.reason;
-        if (event.name === "prompt.submit" && result.block.suppressOriginalPrompt) out.suppressOriginalPrompt = true;
+        // suppressOriginalPrompt must sit inside hookSpecificOutput, next to the event name
+        // (https://code.claude.com/docs/en/hooks.md, "What a blocked prompt leaves behind").
+        if (event.name === "prompt.submit" && result.block.suppressOriginalPrompt) {
+          out.hookSpecificOutput = { hookEventName: native, suppressOriginalPrompt: true };
+        }
       }
     } else if (context) {
       out.hookSpecificOutput = { hookEventName: native, additionalContext: context };

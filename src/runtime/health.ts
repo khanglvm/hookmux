@@ -1,5 +1,8 @@
 // A tiny always-on error record, written only when something fails, so
 // `doctor` can say "plugin X failed 3 times, last at ..." even with logging off.
+// Overlapping hook runs read, update and rename the file without a lock, so
+// the last writer wins and a count can come out a little low. That is fine for
+// a "how often, and when last" hint; nothing decides anything from it.
 
 import { readJson, writeFileAtomic } from "./fsutil.ts";
 

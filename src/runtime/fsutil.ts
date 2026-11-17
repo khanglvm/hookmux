@@ -5,7 +5,7 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-export function writeFileAtomic(file: string, data: string, mode = 0o600): void {
+export function writeFileAtomic(file: string, data: string | Uint8Array, mode = 0o600): void {
   mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
   const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
   try {

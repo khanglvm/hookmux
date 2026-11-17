@@ -103,13 +103,13 @@ Named groups of patterns; true when every group in at least one fire_when combin
 
 Runs an executable from the plugin folder; it reads the event as JSON on stdin and prints its value.
 
-| Option       | Meaning                                                       |
-| ------------ | ------------------------------------------------------------- |
-| `command`    | path relative to the plugin folder, executable with a shebang |
-| `args`       | list of string arguments                                      |
-| `timeout_ms` | default 1000, at most 10000                                   |
-| `needs_raw`  | default false; true also sends the host's original payload    |
-| `output`     | "bool" (default) or "score"                                   |
+| Option       | Meaning                                                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `command`    | path relative to the plugin folder, executable with a shebang; a private copy runs, so find sibling files through $HOOKMUX_PLUGIN_DIR, not $0 |
+| `args`       | list of string arguments                                                                                                                      |
+| `timeout_ms` | default 1000, at most 10000                                                                                                                   |
+| `needs_raw`  | default false; true also sends the host's original payload                                                                                    |
+| `output`     | "bool" (default) or "score"                                                                                                                   |
 
 ## `tool`
 

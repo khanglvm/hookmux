@@ -14,6 +14,7 @@ import {
   type Origin,
   PHASES,
   type Phase,
+  PLUGIN_ID,
   type PluginSpec,
 } from "../core/types.ts";
 import { evalExprShape } from "./shape.ts";
@@ -22,8 +23,11 @@ export const MANIFEST_FILE = "plugin.toml";
 export const MANIFEST_SCHEMA = 1;
 const MAX_MANIFEST_BYTES = 256 * 1024;
 const MAX_TEXT_CHARS = 4000;
-export const PLUGIN_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+export { PLUGIN_ID };
+
 const ORIGINS: readonly Origin[] = ["user", "system", "unknown"];
+export const ON_ERROR_PROBLEM = "hookmux always fails open; remove on_error";
 
 /** Top-level manifest keys; `hookmux schema` documents each one. */
 export const KNOWN_KEYS: ReadonlySet<string> = new Set([
@@ -78,6 +82,15 @@ export class ManifestError extends Error {
 
 /** Reads and parses a manifest file, refusing oversized or group/world-writable files. */
 export function readManifest(dir: string): RawManifest {
+  return readManifestText(dir, () => readFileSync(join(dir, MANIFEST_FILE), "utf8"));
+}
+
+/**
+ * Parses manifest text the caller already read, after the same size, mode and
+ * owner checks as readManifest, so the registry can hash and parse one set of bytes.
+ * `text` is a string or a reader called only once the checks pass.
+ */
+export function readManifestText(dir: string, text: string | (() => string)): RawManifest {
   const file = join(dir, MANIFEST_FILE);
   const stat = statSync(file);
   if (stat.size > MAX_MANIFEST_BYTES) throw new ManifestError(file, [`larger than ${MAX_MANIFEST_BYTES} bytes`]);
@@ -87,8 +100,12 @@ export function readManifest(dir: string): RawManifest {
       throw new ManifestError(file, ["not owned by the current user"]);
     }
   }
+  const source = typeof text === "string" ? text : text();
+  if (Buffer.byteLength(source) > MAX_MANIFEST_BYTES) {
+    throw new ManifestError(file, [`larger than ${MAX_MANIFEST_BYTES} bytes`]);
+  }
   try {
-    return parseToml(readFileSync(file, "utf8")) as RawManifest;
+    return parseToml(source) as RawManifest;
   } catch (error) {
     throw new ManifestError(file, [`invalid TOML: ${(error as Error).message}`]);
   }
@@ -188,8 +205,9 @@ function toSpec(m: RawManifest, dir: string, defaults: LoadDefaults, where: stri
   for (const o of origins) if (!ORIGINS.includes(o)) problems.push(`unknown origin '${o}'`);
   const dedupe = str("dedupe", "none");
   if (dedupe !== "none" && dedupe !== "session") problems.push("dedupe must be 'none' or 'session'");
-  const onError = str("on_error", "open");
-  if (onError !== "open" && onError !== "block") problems.push("on_error must be 'open' or 'block'");
+  // Product rule: an error never blocks the agent, so "open" is the only accepted value
+  // and it changes nothing. Older manifests that say "block" must drop the key.
+  if (m.on_error !== undefined && m.on_error !== "open") problems.push(ON_ERROR_PROBLEM);
 
   const checks = readChecks(m.checks, problems);
   const when = str("when");
@@ -201,9 +219,6 @@ function toSpec(m: RawManifest, dir: string, defaults: LoadDefaults, where: stri
     if (source !== undefined && source !== "") problems.push(...evalExprShape(label, source, checks));
   }
   const effects = readEffects(m.then, problems);
-  if (onError === "block" && !effects.some((e) => e.effect === "block")) {
-    problems.push("on_error = 'block' needs a block effect");
-  }
   const params = readParams(m.params, problems);
 
   if (problems.length > 0) throw new ManifestError(where, problems);
@@ -225,7 +240,6 @@ function toSpec(m: RawManifest, dir: string, defaults: LoadDefaults, where: stri
     effects,
     dedupe: dedupe as PluginSpec["dedupe"],
     ...(typeof m.exclusive === "string" ? { exclusive: m.exclusive } : {}),
-    onError: onError as PluginSpec["onError"],
     params,
   };
 }

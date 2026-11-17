@@ -28,6 +28,8 @@ export interface RegistryPlugin {
   problem?: string;
   warnings: string[];
   capabilities: string[];
+  /** True when promote (or auto-trust) approved this content and capabilities; shadow previews are not. */
+  trusted?: boolean;
   hash?: string;
   /** SHA-256 per file (relative path), so scripts can be re-verified right before they run. */
   fileHashes?: Record<string, string>;

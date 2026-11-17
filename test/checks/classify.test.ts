@@ -10,6 +10,7 @@ import { getCheck, type ProviderSettings } from "../../src/checks/registry.ts";
 import type { CheckSpec, Signal } from "../../src/core/types.ts";
 import { readConfig } from "../../src/load/config.ts";
 import { COOLDOWN_MS, isCoolingDown, recordFailure, recordSuccess } from "../../src/providers/breaker.ts";
+import { envProxyActive } from "../../src/providers/openai-compat.ts";
 import { isLoopbackUrl, remoteRefusal } from "../../src/providers/policy.ts";
 import { type ContextOptions, checkContext, pluginSpec, promptEvent, useTempHome } from "./support.ts";
 
@@ -260,4 +261,27 @@ test("an unknown provider name or kind gives unknown", async () => {
   assert.match((await classify.run(spec, ctx)).error ?? "", /not configured/);
   const odd = checkContext(pluginSpec("/tmp", { c: spec }), { providers: { missing: { kind: "grpc", url: baseUrl } } });
   assert.match((await classify.run(spec, odd)).error ?? "", /not supported/);
+});
+
+test("an env proxy stops a local provider before any request, unless allow_remote", async () => {
+  process.env.NODE_USE_ENV_PROXY = "1";
+  try {
+    reply = () => ({ body: chat({ label: "design", confidence: 0.9 }) });
+    seen.length = 0;
+    const local = await run();
+    assert.equal(local.signal.value, null);
+    assert.match(local.signal.error ?? "", /environment proxy is active/);
+    assert.equal(seen.length, 0, "no request was sent");
+    assert.equal(isCoolingDown(local.name), false, "a refusal is not a provider fault");
+    assert.equal((await run({ allowRemote: true })).signal.value, 0.9);
+  } finally {
+    delete process.env.NODE_USE_ENV_PROXY;
+  }
+});
+
+test("--use-env-proxy is seen on the command line and in NODE_OPTIONS", () => {
+  assert.equal(envProxyActive({}, []), false);
+  assert.equal(envProxyActive({ NODE_USE_ENV_PROXY: "" }, []), false);
+  assert.equal(envProxyActive({}, ["--use-env-proxy"]), true);
+  assert.equal(envProxyActive({ NODE_OPTIONS: "--max-old-space-size=99 --use-env-proxy" }, []), true);
 });

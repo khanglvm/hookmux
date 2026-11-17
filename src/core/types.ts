@@ -6,6 +6,9 @@
 export const CANONICAL_EVENTS = ["prompt.submit", "session.start", "tool.before", "tool.after"] as const;
 export type CanonicalEvent = (typeof CANONICAL_EVENTS)[number];
 
+/** Plugin ids: also folder and state-file names, so they never hold a path separator. */
+export const PLUGIN_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
 /** Who produced a prompt. Route plugins only fire on "user" by default. */
 export type Origin = "user" | "system" | "unknown";
 
@@ -108,7 +111,6 @@ export interface PluginSpec {
   dedupe: "none" | "session";
   /** Plugins sharing a group: only the first that fires contributes. */
   exclusive?: string;
-  onError: "open" | "block";
   params: Record<string, string>;
   /** SHA-256 per file in the plugin folder, from the registry; scripts are re-verified against it. */
   fileHashes?: Record<string, string>;

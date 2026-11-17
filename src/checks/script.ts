@@ -1,22 +1,20 @@
 // The `script` check: runs an executable from the plugin's own folder as a
-// tier-1 subprocess. Right before it runs, the file is hashed against the hash
-// recorded when the plugin was promoted. The script gets a scrubbed environment
-// and the event as JSON on stdin. On timeout, deadline or oversized output its
-// whole process group is killed, so nothing it started outlives the hook.
+// tier-1 subprocess. Right before it runs, the file is read once, hashed
+// against the hash recorded when the plugin was promoted, and a private copy of
+// exactly those bytes is executed. The script gets a scrubbed environment and
+// the event as JSON on stdin. On timeout, deadline or oversized output it is
+// killed with everything it started (script-process.ts).
 
-import { type ChildProcess, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";
 import type { CheckSpec, Signal } from "../core/types.ts";
 import { type CheckContext, registerCheck } from "./registry.ts";
+import { cachedScript, sha256Hex } from "./script-cache.ts";
+import { type ProcessResult, runProcess } from "./script-process.ts";
 import { clip } from "./text.ts";
 
 const DEFAULT_TIMEOUT_MS = 1000;
 const MAX_TIMEOUT_MS = 10_000;
-const MAX_STDOUT_BYTES = 64 * 1024;
-/** Only this much stderr is kept, and only for the error message. */
-const STDERR_KEEP_CHARS = 300;
 /** The only parent variables a script sees, so tokens and keys in the hook's environment stay out. */
 const ENV_PASSTHROUGH = ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR"] as const;
 
@@ -53,14 +51,11 @@ function optionProblems(spec: CheckSpec): string[] {
   return problems;
 }
 
-function sha256(file: string): string {
-  return createHash("sha256").update(readFileSync(file)).digest("hex");
-}
-
 /**
- * Finds the script inside the plugin folder and checks it against the promote-time
- * hash. The hash key is the real path relative to the real plugin folder, the same
- * shape the registry records, so "./bin/x.sh" and "bin/x.sh" find the same entry.
+ * Finds the script inside the plugin folder, checks it against the promote-time
+ * hash and returns the private copy to execute. The hash key is the real path
+ * relative to the real plugin folder, the same shape the registry records, so
+ * "./bin/x.sh" and "bin/x.sh" find the same entry.
  */
 function resolveScript(ctx: CheckContext, command: string): { file: string } | { error: string } {
   let dir: string;
@@ -76,9 +71,16 @@ function resolveScript(ctx: CheckContext, command: string): { file: string } | {
     return { error: "script resolves outside the plugin folder" };
   }
   if (!statSync(file).isFile()) return { error: "script is not a regular file" };
-  const expected = ctx.plugin.fileHashes?.[rel];
-  if (expected === undefined || expected !== sha256(file)) return { error: "script changed since promote" };
-  return { file };
+  const expected = ctx.plugin.fileHashes?.[rel.replaceAll("\\", "/")];
+  // Read once: the bytes that pass the hash check are the bytes that run.
+  const bytes = readFileSync(file);
+  const actual = sha256Hex(bytes);
+  if (expected === undefined || expected !== actual) return { error: "script changed since promote" };
+  try {
+    return { file: cachedScript(bytes, actual) };
+  } catch (error) {
+    return { error: `cannot prepare script: ${(error as Error).message}` };
+  }
 }
 
 /** The check's own name. CheckContext does not carry it, but the engine passes the plugin's own spec object. */
@@ -116,113 +118,6 @@ function scriptCwd(ctx: CheckContext): string {
     // The host's working folder may be gone; fall back to the plugin folder.
   }
   return ctx.plugin.dir;
-}
-
-/** Process groups still running. Killed on process exit in case the hook exits while a script runs. */
-const liveGroups = new Set<number>();
-let exitHookInstalled = false;
-
-function killGroup(pid: number | undefined): void {
-  if (pid === undefined) return;
-  try {
-    // A negative pid targets the group; `detached: true` made the script its leader.
-    process.kill(-pid, "SIGKILL");
-  } catch {
-    // ESRCH: the group is already gone.
-  }
-}
-
-function trackGroup(pid: number): void {
-  if (!exitHookInstalled) {
-    exitHookInstalled = true;
-    process.on("exit", () => {
-      for (const group of liveGroups) killGroup(group);
-    });
-  }
-  liveGroups.add(pid);
-}
-
-interface ProcessRun {
-  file: string;
-  args: string[];
-  cwd: string;
-  env: Record<string, string>;
-  stdin: string;
-  budgetMs: number;
-  signal: AbortSignal;
-}
-
-export interface ProcessResult {
-  exitCode: number | null;
-  stdout: string;
-  stderr: string;
-  /** Set when the run was cut short or never started. */
-  failure?: string;
-}
-
-/** Buffers stdout up to the cap and the head of stderr; calls `onOverflow` once stdout passes the cap. */
-function collectOutput(child: ChildProcess, onOverflow: () => void): { stdout: () => string; stderr: () => string } {
-  const chunks: Buffer[] = [];
-  let stdoutBytes = 0;
-  let stderr = "";
-  child.stdout?.on("data", (chunk: Buffer) => {
-    stdoutBytes += chunk.length;
-    if (stdoutBytes > MAX_STDOUT_BYTES) onOverflow();
-    else chunks.push(chunk);
-  });
-  child.stderr?.on("data", (chunk: Buffer) => {
-    if (stderr.length < STDERR_KEEP_CHARS) stderr = (stderr + chunk.toString("utf8")).slice(0, STDERR_KEEP_CHARS);
-  });
-  return { stdout: () => Buffer.concat(chunks).toString("utf8"), stderr: () => stderr };
-}
-
-function runProcess(run: ProcessRun): Promise<ProcessResult> {
-  return new Promise((done) => {
-    let child: ChildProcess;
-    try {
-      // The file itself is executed (shebang plus executable bit), with no shell.
-      child = spawn(run.file, run.args, { cwd: run.cwd, env: run.env, detached: true, stdio: "pipe" });
-    } catch (error) {
-      done({ exitCode: null, stdout: "", stderr: "", failure: `cannot run script: ${(error as Error).message}` });
-      return;
-    }
-    const pid = child.pid;
-    if (pid !== undefined) trackGroup(pid);
-    let failure: string | undefined;
-    let settled = false;
-
-    // Kills synchronously: the engine stops awaiting this check the moment the deadline aborts.
-    const stop = (reason: string) => {
-      failure ??= reason;
-      killGroup(pid);
-    };
-    const onAbort = () => stop("deadline reached");
-    const timer = setTimeout(() => stop(`timed out after ${run.budgetMs} ms`), run.budgetMs);
-    run.signal.addEventListener("abort", onAbort, { once: true });
-    const output = collectOutput(child, () => stop(`stdout over ${MAX_STDOUT_BYTES / 1024} KiB`));
-
-    const finish = (exitCode: number | null) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      run.signal.removeEventListener("abort", onAbort);
-      killGroup(pid);
-      if (pid !== undefined) liveGroups.delete(pid);
-      done({ exitCode, stdout: output.stdout(), stderr: output.stderr(), ...(failure ? { failure } : {}) });
-    };
-
-    // A script that exits without reading stdin closes the pipe; that is not an error.
-    child.stdin?.on("error", () => {});
-    child.on("error", (error: NodeJS.ErrnoException) => {
-      failure ??= `cannot run script: ${error.code ?? error.message}`;
-      finish(null);
-    });
-    // Background processes the script left behind would hold stdout open and delay
-    // `close`; killing the group as soon as the script exits ends them.
-    child.on("exit", () => killGroup(pid));
-    child.on("close", (code) => finish(code));
-    child.stdin?.end(run.stdin);
-  });
 }
 
 function withStderr(reason: string, stderr: string): string {
@@ -270,7 +165,8 @@ registerCheck({
   outputOf: (spec) => (spec.output === "score" ? "score" : "bool"),
   summary: "Runs an executable from the plugin folder; it reads the event as JSON on stdin and prints its value.",
   options: {
-    command: "path relative to the plugin folder, executable with a shebang",
+    command:
+      "path relative to the plugin folder, executable with a shebang; a private copy runs, so find sibling files through $HOOKMUX_PLUGIN_DIR, not $0",
     args: "list of string arguments",
     timeout_ms: `default ${DEFAULT_TIMEOUT_MS}, at most ${MAX_TIMEOUT_MS}`,
     needs_raw: "default false; true also sends the host's original payload",

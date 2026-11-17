@@ -5,12 +5,14 @@
 // with one previous file kept, so the log never grows past about 2 MiB.
 
 import { createHash } from "node:crypto";
-import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
+import { appendFileSync, closeSync, mkdirSync, openSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import type { HookEvent, HubResult } from "../core/types.ts";
 import { readJson, writeFileAtomic } from "./fsutil.ts";
 
 export const LOG_ROTATE_BYTES = 1024 * 1024;
+/** A rotation takes milliseconds, so a lock this old was left by a run that was killed. */
+const LOCK_STALE_MS = 10_000;
 const PROMPT_TEXT_CHARS = 500;
 
 export interface LogSettings {
@@ -94,10 +96,57 @@ export function buildLogLine(run: RunRecord, settings: LogSettings, now = new Da
 
 export function appendLog(file: string, line: string): void {
   mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
-  try {
-    if (statSync(file).size + line.length > LOG_ROTATE_BYTES) renameSync(file, `${file}.1`);
-  } catch {
-    // No log yet.
-  }
+  if (logSize(file) + line.length > LOG_ROTATE_BYTES) rotateLocked(file, line.length);
   appendFileSync(file, line, { mode: 0o600 });
+}
+
+function logSize(file: string): number {
+  try {
+    return statSync(file).size;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Renames the log to `.1` while holding `<log>.lock`. Two runs that both see a
+ * full log would otherwise rename twice, and the second rename would replace
+ * the previous file with a few fresh lines. A run that finds the lock taken
+ * skips rotating and just appends; the log can run a little over the limit.
+ */
+function rotateLocked(file: string, adding: number): void {
+  const lock = `${file}.lock`;
+  if (!takeLock(lock)) return;
+  try {
+    // Another run may have rotated between our size check and taking the lock.
+    if (logSize(file) + adding > LOG_ROTATE_BYTES) renameSync(file, `${file}.1`);
+  } catch {
+    // The log vanished in between; appending creates a new one.
+  } finally {
+    rmSync(lock, { force: true });
+  }
+}
+
+/** Creates the lock file exclusively. A lock older than LOCK_STALE_MS is left from a killed run and is replaced. */
+function takeLock(lock: string): boolean {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      closeSync(openSync(lock, "wx", 0o600));
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") return false;
+      if (attempt > 0 || !isStale(lock)) return false;
+      rmSync(lock, { force: true });
+    }
+  }
+  return false;
+}
+
+function isStale(lock: string): boolean {
+  try {
+    return Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS;
+  } catch {
+    // Removed by its owner in the meantime: try once more.
+    return true;
+  }
 }

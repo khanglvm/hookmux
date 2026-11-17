@@ -83,11 +83,32 @@ function isProviderFaultStatus(status: number): boolean {
   return status >= 500 || status === 429;
 }
 
+/**
+ * True when Node's fetch may route through HTTP_PROXY/HTTPS_PROXY: Node does so
+ * only when NODE_USE_ENV_PROXY is set or it runs with --use-env-proxy, either on
+ * the command line or in NODE_OPTIONS (which execArgv does not show).
+ * https://nodejs.org/api/cli.html#--use-env-proxy
+ */
+export function envProxyActive(
+  env: NodeJS.ProcessEnv = process.env,
+  execArgv: readonly string[] = process.execArgv,
+): boolean {
+  if (env.NODE_USE_ENV_PROXY !== undefined && env.NODE_USE_ENV_PROXY !== "") return true;
+  return execArgv.includes("--use-env-proxy") || (env.NODE_OPTIONS ?? "").split(/\s+/).includes("--use-env-proxy");
+}
+
+export const PROXY_REFUSAL =
+  "an environment proxy is active (NODE_USE_ENV_PROXY or --use-env-proxy), so a local provider's prompt could leave the machine; unset it or set allow_remote = true";
+
 export async function classifyOpenAICompat(
   provider: ProviderSettings,
   request: ClassifyRequest,
   budget: ClassifyBudget,
 ): Promise<ClassifyOutcome> {
+  // A loopback URL is the only promise a provider without allow_remote makes, and a proxy breaks it.
+  if (provider.allowRemote !== true && envProxyActive()) {
+    return { ok: false, error: PROXY_REFUSAL, providerFault: false };
+  }
   // AbortSignal.timeout throws on a fractional delay, and remainingMs is a float.
   const ownTimeout = Math.max(1, Math.floor(provider.timeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS));
   const clipped = budget.remainingMs < ownTimeout;

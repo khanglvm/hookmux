@@ -18,7 +18,7 @@ export const MANIFEST_KEY_DOCS: Record<string, string> = {
     'who produced the prompt: "user", "system", "unknown"; guards default to all, others to config route_origins',
   dedupe: '"none" (default) or "session": fire at most once per session',
   exclusive: "group name; only the first plugin of a group that fires contributes",
-  on_error: '"open" (default) or "block": guards may fail closed when checks error',
+  on_error: 'only "open" is accepted, and it changes nothing: hookmux always fails open, so "block" is rejected',
   when: "boolean expression over check names: and, or, not, parentheses, score comparisons such as s >= 0.7",
   when_degraded: "fallback expression used when `when` stays unknown (a check failed or timed out)",
   params: "table of strings, numbers or booleans available to templates",

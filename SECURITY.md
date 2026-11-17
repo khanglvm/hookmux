@@ -22,3 +22,5 @@ hookmux runs inside the agent clients it is registered with, on every event it h
 - A host payload or plugin file that makes hookmux read or write outside `~/.hookmux` and the client configs it manages.
 
 Out of scope: anything that already needs shell access as your user, such as editing `~/.hookmux` or a client's config directly. The trust pins catch changes nobody approved, and they do not sandbox plugins from someone who can edit those files.
+
+`promote` refuses `--yes`, a stdin that is not a terminal, and the environment variables Claude Code, Codex and Gemini CLI set on the commands they run. A terminal is not proof that a person is typing, so this is a checkpoint against injected or accidental activation, not a defence against a malicious process running as your user: such a process can open a pseudo-terminal, clear its environment or edit `trust.json`. A way through it from a normal agent tool call, or from a plugin's own content, is in scope.

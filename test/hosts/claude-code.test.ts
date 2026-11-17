@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -58,7 +58,8 @@ const EXPECTED: Record<CanonicalEvent, Record<ResultShape, string>> = {
     context: '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"first\\n\\nsecond"}}',
     notice: '{"systemMessage":"heads up"}',
     block: '{"decision":"block","reason":"no secrets"}',
-    blockSuppress: '{"decision":"block","reason":"no secrets","suppressOriginalPrompt":true}',
+    blockSuppress:
+      '{"decision":"block","reason":"no secrets","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","suppressOriginalPrompt":true}}',
   },
   "session.start": {
     empty: "",
@@ -120,4 +121,18 @@ configEditorCases({
   adapter: claudeCode,
   envFor: (dir) => ({ CLAUDE_CONFIG_DIR: dir }),
   foreignRoot: { model: "opus", permissions: { allow: ["Bash(ls)"] } },
+});
+
+test("claude-code uninstall still deletes a hub group in the middle and notes the move", () => {
+  const dir = mkdtempSync(join(tmpdir(), "hookmux-claude-"));
+  const env = { CLAUDE_CONFIG_DIR: dir };
+  const file = claudeCode.config.file(env);
+  claudeCode.config.install({ launcher: LAUNCHER, events: ["prompt.submit"], timeoutSec: 5 }, env);
+  const config = JSON.parse(readFileSync(file, "utf8"));
+  const user = { hooks: [{ type: "command", command: "/usr/local/bin/after-hub" }] };
+  config.hooks.UserPromptSubmit.push(user);
+  writeFileSync(file, JSON.stringify(config));
+  const change = claudeCode.config.uninstall(LAUNCHER, env);
+  assert.equal(change.notes.length, 1);
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")).hooks.UserPromptSubmit, [user]);
 });

@@ -92,6 +92,11 @@ const layout: JsonHookLayout = {
   // it would show on every run, and changing it later re-triggers approval.
   handler: (command, timeoutSec) => ({ type: "command", command, timeout: timeoutSec }),
   checkRoot,
+  // Approval is keyed by (event, group index, handler index) (hooks/src/engine/discovery.rs:632,
+  // 650, 811), so a removed hub group keeps its slot. An empty group is valid: MatcherGroup.hooks
+  // is a #[serde(default)] Vec (protocol/src/hooks.rs:140-146) and its handler loop just runs zero
+  // times (discovery.rs:650).
+  preserveGroupPositions: true,
 };
 
 /**

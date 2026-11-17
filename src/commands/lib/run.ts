@@ -5,7 +5,7 @@
 import "../../checks/index.ts";
 import { listChecks, registerCheck } from "../../checks/registry.ts";
 import type { EngineSettings } from "../../core/engine.ts";
-import type { CanonicalEvent, HookEvent, PluginOutcome, Signal } from "../../core/types.ts";
+import type { CanonicalEvent, HookEvent, PluginOutcome, PluginSpec, Signal } from "../../core/types.ts";
 import { ADAPTERS, getAdapter } from "../../hosts/index.ts";
 import type { HostAdapter } from "../../hosts/types.ts";
 import type { Registry } from "../../load/snapshot.ts";
@@ -15,6 +15,7 @@ import { clip, type Status } from "./output.ts";
 /** Host used when a command or test case names none. */
 export const DEFAULT_HOST = "claude-code";
 export const STUBBED_MODEL_ERROR = "model check not run (stubbed; pass --live to call the model)";
+export const SCRIPT_NOT_RUN = "script not run: plugin not promoted (use --run-scripts)";
 
 /** @throws UsageError naming the known hosts when `id` has no adapter. */
 export function adapterOrUsage(id: string): HostAdapter {
@@ -47,6 +48,36 @@ export function stubModelChecks(): void {
   for (const kind of listChecks()) {
     if (!kind.modelBacked) continue;
     registerCheck({ ...kind, run: () => ({ value: null, error: STUBBED_MODEL_ERROR }) });
+  }
+}
+
+/** Plugin specs whose subprocess checks must not run; see withoutScripts. */
+const unreviewed = new WeakSet<PluginSpec>();
+let scriptGuardInstalled = false;
+
+/**
+ * Returns a copy of `spec` whose subprocess (tier 1) checks give unknown with
+ * SCRIPT_NOT_RUN instead of running. Previews of plugins nobody promoted use it,
+ * so looking at a plugin never executes its code. The engine passes this exact
+ * object to each check, which is how the guard tells it apart from trusted specs.
+ */
+export function withoutScripts(spec: PluginSpec): PluginSpec {
+  installScriptGuard();
+  const copy = { ...spec };
+  unreviewed.add(copy);
+  return copy;
+}
+
+/** Wraps every tier-1 kind, in this process only, so it refuses plugins marked by withoutScripts. */
+function installScriptGuard(): void {
+  if (scriptGuardInstalled) return;
+  scriptGuardInstalled = true;
+  for (const kind of listChecks()) {
+    if (kind.tier !== 1) continue;
+    registerCheck({
+      ...kind,
+      run: (spec, ctx) => (unreviewed.has(ctx.plugin) ? { value: null, error: SCRIPT_NOT_RUN } : kind.run(spec, ctx)),
+    });
   }
 }
 

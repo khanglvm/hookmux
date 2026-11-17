@@ -28,7 +28,7 @@ export interface HostAdapter {
 }
 
 export interface HubEntry {
-  /** Absolute path of the launcher; hub entries are found by this command prefix. */
+  /** Absolute path of the launcher; hub entries are found by this command's first shell word. */
   launcher: string;
   events: CanonicalEvent[];
   /** Host-side timeout for the hub entry, in seconds. The adapter converts units. */
@@ -55,17 +55,4 @@ export interface HostConfigEditor {
   install(entry: HubEntry, env?: NodeJS.ProcessEnv): ConfigChange;
   /** Removes hub entries only. */
   uninstall(launcher: string, env?: NodeJS.ProcessEnv): ConfigChange;
-}
-
-/** The command string a host runs for one event. */
-export function hubCommand(launcher: string, hostId: string, event: CanonicalEvent): string {
-  const quoted = /^[A-Za-z0-9_./~-]+$/.test(launcher) ? launcher : `"${launcher.replaceAll('"', '\\"')}"`;
-  return `${quoted} --host ${hostId} --event ${event}`;
-}
-
-/** True when a configured command is a hub entry for this launcher. */
-export function isHubCommand(command: unknown, launcher: string): boolean {
-  if (typeof command !== "string") return false;
-  const trimmed = command.trim().replace(/^"/, "");
-  return trimmed.startsWith(launcher) && trimmed.includes("--host ");
 }

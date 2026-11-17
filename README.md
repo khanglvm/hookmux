@@ -110,9 +110,10 @@ The command set is still growing. `hookmux help` lists the commands in your inst
 
 ## Safety model
 
-- Fail-open. If Node or the engine is missing, or the engine fails or runs past its deadline, the launcher prints nothing and exits 0, which every client treats as "no opinion". A check that errors or times out counts as unknown and never blocks, unless a guard plugin opts in with `on_error = "block"`.
-- Trust pins. `hookmux promote` records a SHA-256 hash of the plugin folder. If a file changes afterwards, whether by you, an agent or an update, the plugin stops running until you promote it again.
-- Promote needs a terminal. It asks for confirmation and refuses to run when stdin is not an interactive terminal, so an agent can stage a plugin but cannot make it live.
+- Fail-open. If Node or the engine is missing, or the engine fails, hangs or runs past its deadline, the launcher prints nothing and exits 0, which every client treats as "no opinion". A check that errors or times out counts as unknown and never blocks.
+- Trust pins. `hookmux promote` records a SHA-256 hash of the plugin folder and the capabilities it has with your `config.toml` overrides. If a file changes afterwards, whether by you, an agent or an update, or an override adds a capability, the plugin stops running until you promote it again.
+- Promote needs you. It asks you to type `y`, never takes `--yes`, and refuses when stdin is not a terminal or when it sees the environment Claude Code, Codex or Gemini CLI give the commands they run. This guards against an agent activating a plugin because of an injected instruction or by accident. It is not a sandbox: a process running as your user can still edit `~/.hookmux` directly.
+- Previews run no unreviewed code. `hookmux test` and `hookmux explain --all` skip the scripts of plugins you have not promoted unless you pass `--run-scripts`.
 - Shadow mode. A plugin added with `--shadow` (or `shadow = true`) is evaluated and logged, and adds nothing to the agent's context.
 - Rules decide blocks. By default a block needs a check that is not model-backed to agree, so a misread by a model cannot discard your prompt.
 - No telemetry. hookmux collects no usage data.

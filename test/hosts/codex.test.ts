@@ -230,3 +230,17 @@ configEditorCases({
   envFor: (dir) => ({ CODEX_HOME: dir }),
   foreignRoot: { description: "my own hooks" },
 });
+
+test("codex uninstall keeps later groups at their index with an empty placeholder", () => {
+  const { env, file } = codexHome();
+  codex.config.install({ launcher: LAUNCHER, events: ["prompt.submit", "tool.before"], timeoutSec: 5 }, env);
+  const config = JSON.parse(readFileSync(file, "utf8"));
+  const user = { hooks: [{ type: "command", command: "/usr/local/bin/after-hub" }] };
+  config.hooks.UserPromptSubmit.push(user);
+  writeFileSync(file, JSON.stringify(config));
+  const change = codex.config.uninstall(LAUNCHER, env);
+  assert.deepEqual(change.notes, [], "nothing moved, so there is no re-approval note");
+  const after = JSON.parse(readFileSync(file, "utf8"));
+  assert.deepEqual(after.hooks.UserPromptSubmit, [{ hooks: [] }, user]);
+  assert.equal(after.hooks.PreToolUse, undefined, "a trailing hub group is still removed");
+});

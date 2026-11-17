@@ -8,7 +8,8 @@
 import { copyFileSync, existsSync, readFileSync, statSync } from "node:fs";
 import type { CanonicalEvent } from "../core/types.ts";
 import { writeFileAtomic } from "../runtime/fsutil.ts";
-import { type ConfigChange, type HubEntry, hubCommand, isHubCommand } from "./types.ts";
+import { hubCommand, isHubCommand } from "./hub-command.ts";
+import type { ConfigChange, HubEntry } from "./types.ts";
 
 export interface JsonHookLayout {
   hostId: string;
@@ -22,6 +23,12 @@ export interface JsonHookLayout {
    * ConfigEditError when the host could not load the file as it stands.
    */
   checkRoot?(config: Record<string, unknown>, file: string): void;
+  /**
+   * Keep every group's index on uninstall: a removed hub group that has groups
+   * after it becomes `{"hooks": []}` instead of being deleted. For hosts that key
+   * hook approval by position (Codex), so later user hooks keep their approval.
+   */
+  preserveGroupPositions?: boolean;
 }
 
 type Json = Record<string, unknown>;
@@ -124,20 +131,10 @@ export function uninstallEntries(file: string, launcher: string, layout: JsonHoo
   for (const [canonical, native] of Object.entries(layout.nativeEvents) as [CanonicalEvent, string | null][]) {
     if (!native || !Array.isArray(hooks[native])) continue;
     const groups = hooks[native];
-    const kept: Group[] = [];
-    let removed = false;
-    for (const group of groups) {
-      if (!groupHasHub(group, launcher)) {
-        kept.push(group);
-        continue;
-      }
-      removed = true;
-      const others = (group.hooks ?? []).filter((h) => !isHubCommand(h?.command, launcher));
-      if (others.length > 0) kept.push({ ...group, hooks: others });
-    }
-    if (!removed) continue;
+    if (!groups.some((g) => groupHasHub(g, launcher))) continue;
+    const kept = withoutHub(groups, launcher, layout.preserveGroupPositions === true);
     const lastIndex = groups.findLastIndex((g) => groupHasHub(g, launcher));
-    if (lastIndex < groups.length - 1) {
+    if (!layout.preserveGroupPositions && lastIndex < groups.length - 1) {
       change.notes.push(
         `${native}: entries after the hub entry moved up one place; ${layout.hostId} may ask to re-approve them`,
       );
@@ -152,4 +149,28 @@ export function uninstallEntries(file: string, launcher: string, layout: JsonHoo
     save(file, config, change);
   }
   return change;
+}
+
+/** Marks a removed hub group whose slot is kept; replaced by `{"hooks": []}` on output. */
+const PLACEHOLDER = Symbol("removed hub group");
+
+/**
+ * The groups with hub handlers removed. A group left with no handler is dropped,
+ * or, when `preserve` is set and a group follows it, kept as an empty placeholder
+ * so later groups keep their index. Placeholders left trailing are trimmed; the
+ * user's own empty groups are never touched.
+ */
+function withoutHub(groups: Group[], launcher: string, preserve: boolean): Group[] {
+  const kept: (Group | typeof PLACEHOLDER)[] = [];
+  for (const group of groups) {
+    if (!groupHasHub(group, launcher)) {
+      kept.push(group);
+      continue;
+    }
+    const others = (group.hooks ?? []).filter((h) => !isHubCommand(h?.command, launcher));
+    if (others.length > 0) kept.push({ ...group, hooks: others });
+    else if (preserve) kept.push(PLACEHOLDER);
+  }
+  while (kept.at(-1) === PLACEHOLDER) kept.pop();
+  return kept.map((g) => (g === PLACEHOLDER ? { hooks: [] } : g));
 }

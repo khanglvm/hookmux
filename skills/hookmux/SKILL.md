@@ -60,7 +60,7 @@ In `tests.toml`, add `[[case]]` entries with a `prompt` and `expect = "fire"` or
 
 ### 6. Verify
 
-Run `hookmux validate <dir>`, then `hookmux test`, then `hookmux explain "<prompt>"` for one firing and one silent prompt. Fix the checks until every case passes and `explain` shows the outcome you expect. Done when all three agree.
+Run `hookmux validate <dir>`, then `hookmux test`, then `hookmux explain "<prompt>"` for one firing and one silent prompt. Script checks in a folder nobody promoted show as skipped; for a script you wrote yourself, add `--run-scripts` to `hookmux test <dir>`. Fix the checks until every case passes and `explain` shows the outcome you expect. Done when all three agree.
 
 ### 7. Install in shadow mode
 
@@ -74,6 +74,6 @@ Tell the user what the plugin does (event, trigger, effect, and whether it can b
 hookmux promote <id>
 ```
 
-Promote asks the user to confirm and refuses to run without an interactive terminal; that refusal is the approval step working. Leave promotion entirely to the user: hand over the command and stop there. Running it through a pseudo-terminal, adding `--yes`, editing `~/.hookmux/trust.json` or the registry, and turning on `auto_trust_declarative` are all ways around the user's approval, so none of them is yours to do.
+Promote asks the user to type `y`. It refuses without an interactive terminal, refuses `--yes`, and refuses inside your environment; that refusal is the approval step working. Leave promotion entirely to the user: hand over the command and stop there. Running it through a pseudo-terminal, adding `--yes`, editing `~/.hookmux/trust.json` or the registry, and turning on `auto_trust_declarative` are all ways around the user's approval, so none of them is yours to do.
 
 Any later edit to the plugin folder un-trusts it until the user promotes it again. Say so when you change a live plugin.

@@ -134,8 +134,8 @@ function decide(c: Candidate): PluginOutcome {
     if (fallback === true) return "fire";
     if (fallback === false) return "silent";
   }
-  // Guards may choose to fail closed; everything else fails open.
-  return c.plugin.onError === "block" ? "fire" : "unknown";
+  // Undecided never fires: hookmux always fails open, so an error cannot block the agent.
+  return "unknown";
 }
 
 /** Runs one check; any throw, rejection or deadline abort becomes an unknown signal. */

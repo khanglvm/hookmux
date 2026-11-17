@@ -1,12 +1,17 @@
 // Test sandbox: every CLI run is a subprocess whose HOME, HOOKMUX_HOME and host
 // config folders point into a fresh temp folder, so no test can touch the real
 // ~/.claude, ~/.codex, ~/.gemini or ~/.hookmux, and stdin is never a terminal.
+// Agent markers are stripped so results do not depend on the client running the tests.
 
 import { spawn } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { hashPlugin, readTrust, writeTrust } from "../../src/load/trust.ts";
+import "../../src/checks/index.ts";
+import { AGENT_ENV_MARKERS } from "../../src/commands/lib/agent-env.ts";
+import { compileRegistry } from "../../src/load/registry.ts";
+import { readTrust, writeTrust } from "../../src/load/trust.ts";
+import { homePaths } from "../../src/runtime/paths.ts";
 
 export const ROOT = new URL("../../", import.meta.url).pathname;
 export const MOODBOARD = join(ROOT, "examples", "moodboard");
@@ -30,6 +35,7 @@ export function sandbox(): Sandbox {
   mkdirSync(claude);
   mkdirSync(join(dir, "user"));
   const { HOOKMUX_DISABLE: _off, HOOKMUX_DEBUG: _debug, ...base } = process.env;
+  for (const name of AGENT_ENV_MARKERS) delete base[name];
   const env = {
     ...base,
     HOME: join(dir, "user"),
@@ -70,10 +76,12 @@ export function moodboardCopy(sb: Sandbox, name = "moodboard-src"): string {
   return dir;
 }
 
-/** Pins an installed plugin's current content, standing in for an interactive promote. */
+/** Pins an installed plugin's current content and capabilities, standing in for an interactive promote. */
 export function trustInstalled(sb: Sandbox, id: string): void {
-  const file = join(sb.home, "trust.json");
-  const store = readTrust(file);
-  store.plugins[id] = { hash: hashPlugin(join(sb.home, "plugins", id)), capabilities: [], promotedAt: "test" };
-  writeTrust(file, store);
+  const paths = homePaths(sb.home);
+  const entry = compileRegistry(paths).plugins.find((p) => p.id === id);
+  if (!entry?.hash) throw new Error(`cannot trust ${id}: ${entry?.problem ?? "not installed"}`);
+  const store = readTrust(paths.trust);
+  store.plugins[id] = { hash: entry.hash, capabilities: entry.capabilities, promotedAt: "test" };
+  writeTrust(paths.trust, store);
 }

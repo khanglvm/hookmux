@@ -9,6 +9,7 @@ import { writeFlags } from "../src/load/flags.ts";
 import { compileManifest } from "../src/load/manifest.ts";
 import { compileRegistry } from "../src/load/registry.ts";
 import { KNOWN_HOSTS } from "../src/load/snapshot.ts";
+import { writeTrust } from "../src/load/trust.ts";
 import { homePaths } from "../src/runtime/paths.ts";
 
 const EXAMPLES = new URL("../examples/", import.meta.url).pathname;
@@ -83,4 +84,47 @@ test("a score script can be compared in when, and a bool check cannot", () => {
       defaults,
     ),
   );
+});
+
+test("a config override that adds capabilities sends a promoted plugin back to promote", () => {
+  const paths = home();
+  cpSync(join(EXAMPLES, "moodboard"), join(paths.plugins, "moodboard"), { recursive: true });
+  const before = compileRegistry(paths).plugins[0];
+  assert.ok(before?.hash);
+  writeTrust(paths.trust, {
+    plugins: { moodboard: { hash: before.hash, capabilities: before.capabilities, promotedAt: "test" } },
+  });
+  assert.equal(compileRegistry(paths).plugins[0]?.status, "active");
+  writeFileSync(paths.config, '[[override.moodboard.then]]\neffect = "block"\nreason = "no"\n');
+  const after = compileRegistry(paths).plugins[0];
+  assert.equal(after?.status, "untrusted");
+  assert.equal(after?.problem, "config override adds block; run hookmux promote moodboard");
+  assert.ok(after?.capabilities.includes("block"), "capabilities come from the effective spec");
+});
+
+test("a trust entry without a capability list approves no capability", () => {
+  const paths = home();
+  cpSync(join(EXAMPLES, "moodboard"), join(paths.plugins, "moodboard"), { recursive: true });
+  const hash = compileRegistry(paths).plugins[0]?.hash;
+  writeFileSync(paths.trust, JSON.stringify({ plugins: { moodboard: { hash, promotedAt: "old" } } }));
+  assert.match(compileRegistry(paths).plugins[0]?.problem ?? "", /^config override adds /);
+});
+
+test('on_error = "block" is rejected and "open" changes nothing', () => {
+  const dir = mkdtempSync(join(tmpdir(), "hookmux-onerror-"));
+  const base = {
+    schema: 1,
+    id: "g",
+    phase: "guard",
+    events: ["prompt.submit"],
+    when: "true",
+    then: [{ effect: "block", reason: "x" }],
+  };
+  const defaults = { routeOrigins: ["user" as const], knownHosts: KNOWN_HOSTS };
+  assert.throws(
+    () => compileManifest({ ...base, on_error: "block" }, dir, undefined, defaults),
+    /hookmux always fails open; remove on_error/,
+  );
+  const open = compileManifest({ ...base, on_error: "open" }, dir, undefined, defaults).base;
+  assert.deepEqual(open, compileManifest(base, dir, undefined, defaults).base);
 });

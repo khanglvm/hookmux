@@ -2,15 +2,14 @@
 // overrides and checked against its trust pin. Imported lazily by the hook
 // (only when the saved registry is stale) and directly by the CLI.
 
-import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import type { PluginSpec } from "../core/types.ts";
 import type { HomePaths } from "../runtime/paths.ts";
 import { VERSION } from "../version.ts";
 import { readConfig } from "./config.ts";
-import { applyFlags, type PluginFlags, readFlags } from "./flags.ts";
-import { compileManifest, MANIFEST_FILE, ManifestError, PLUGIN_ID, readManifest } from "./manifest.ts";
+import { applyFlags, type FlagsRead, readFlags } from "./flags.ts";
+import { compileManifest, MANIFEST_FILE, ManifestError, PLUGIN_ID, readManifestText } from "./manifest.ts";
 import {
   KNOWN_HOSTS,
   REGISTRY_FORMAT,
@@ -19,7 +18,15 @@ import {
   type SourceStamp,
   stamp,
 } from "./snapshot.ts";
-import { capabilitiesOf, hashPlugin, isDeclarativeOnly, listPluginFiles, readTrust } from "./trust.ts";
+import {
+  capabilitiesOf,
+  fileHashesOf,
+  hashFiles,
+  isDeclarativeOnly,
+  readPluginFiles,
+  readTrust,
+  type TrustEntry,
+} from "./trust.ts";
 
 export function compileRegistry(paths: HomePaths): Registry {
   const config = readConfig(paths.config);
@@ -36,7 +43,7 @@ export function compileRegistry(paths: HomePaths): Registry {
     : [];
   for (const id of ids) {
     const dir = join(paths.plugins, id);
-    plugins.push(compileOne(id, dir, config, flags, trust.plugins[id]?.hash, sources));
+    plugins.push(compileOne({ id, dir, config, flags, pinned: trust.plugins[id], sources }));
   }
   return {
     format: REGISTRY_FORMAT,
@@ -50,55 +57,91 @@ export function compileRegistry(paths: HomePaths): Registry {
   };
 }
 
-function compileOne(
-  id: string,
-  dir: string,
-  config: ReturnType<typeof readConfig>,
-  flags: PluginFlags,
-  pinned: string | undefined,
-  sources: SourceStamp[],
-): RegistryPlugin {
+interface CompileInput {
+  id: string;
+  dir: string;
+  config: ReturnType<typeof readConfig>;
+  flags: FlagsRead;
+  pinned: TrustEntry | undefined;
+  sources: SourceStamp[];
+}
+
+function compileOne({ id, dir, config, flags, pinned, sources }: CompileInput): RegistryPlugin {
   const entry: RegistryPlugin = { id, status: "invalid", warnings: [], capabilities: [] };
   try {
-    const listing = listPluginFiles(dir);
-    for (const d of listing.dirs) sources.push(stamp(d));
-    for (const f of listing.files) sources.push(stamp(f));
+    // Every file is read once: the trust hash, the per-file hashes and the parsed
+    // manifest all come from these bytes, so an edit between steps cannot slip in.
+    const read = readPluginFiles(dir);
+    for (const d of read.dirs) sources.push(stamp(d));
+    for (const f of read.paths) sources.push(stamp(f));
     if (!PLUGIN_ID.test(id)) throw new Error("folder name is not a valid plugin id");
-    const raw = readManifest(dir);
+    // A corrupt flags file could hide a `disable`, so no plugin runs until it is fixed.
+    if (flags.problem) throw new Error(flags.problem);
+    const manifest = read.files.find((f) => f.rel === MANIFEST_FILE);
+    if (!manifest) throw new Error(`no ${MANIFEST_FILE}`);
+    const raw = readManifestText(dir, manifest.bytes.toString("utf8"));
     if (raw.id !== id) throw new Error(`manifest id '${String(raw.id)}' does not match folder '${id}'`);
     const compiled = compileManifest(raw, dir, config.overrides[id], {
       routeOrigins: config.settings.routeOrigins,
       knownHosts: KNOWN_HOSTS,
     });
     entry.warnings = compiled.warnings;
-    entry.capabilities = capabilitiesOf(compiled.base, Object.values(compiled.variants));
-    entry.hash = hashPlugin(dir);
-    entry.fileHashes = Object.fromEntries(
-      listing.files.map((f) => [relative(dir, f), createHash("sha256").update(readFileSync(f)).digest("hex")]),
-    );
-    const autoTrusted = config.settings.autoTrustDeclarative && isDeclarativeOnly(entry.capabilities);
-    const trusted = pinned === entry.hash || autoTrusted;
+    entry.hash = hashFiles(read.files);
+    entry.fileHashes = fileHashesOf(read.files);
+    // Capabilities of what would actually run: the manifest with config.toml overrides
+    // (merged by compileManifest) and hub flags applied.
+    const flagged = (spec: PluginSpec) => applyFlags(spec, flags);
+    const base = flagged(compiled.base);
+    const variants = Object.fromEntries(Object.entries(compiled.variants).map(([host, spec]) => [host, flagged(spec)]));
+    entry.capabilities = capabilitiesOf(base, Object.values(variants));
+    const decision = trustDecision({
+      id,
+      hash: entry.hash,
+      capabilities: entry.capabilities,
+      pinned,
+      autoTrustDeclarative: config.settings.autoTrustDeclarative,
+    });
     // An unpromoted plugin flagged shadow (`add --shadow`) may run in shadow mode so its
     // decisions show in the log before anyone approves it. It never reaches the agent,
     // and plugins with scripts stay off entirely, because that would run unreviewed code.
-    const shadowPreview = !trusted && flags.shadow.includes(id) && !entry.capabilities.includes("script");
-    if (!trusted && !shadowPreview) {
+    const shadowPreview = !decision.trusted && flags.shadow.includes(id) && !entry.capabilities.includes("script");
+    if (!decision.trusted && !shadowPreview) {
       entry.status = "untrusted";
-      entry.problem = pinned ? "content changed since promote" : "not promoted yet";
+      entry.problem = decision.problem;
       return entry;
     }
     entry.status = "active";
+    entry.trusted = decision.trusted;
     if (shadowPreview) entry.problem = "not promoted yet; running in shadow only";
     // Hub flags come last, after the user's overrides, so `disable` and `--shadow` always hold.
-    const finish = (spec: PluginSpec) => {
-      const flagged = applyFlags(spec, flags);
-      return shadowPreview ? { ...flagged, shadow: true } : flagged;
-    };
-    entry.base = finish(compiled.base);
-    entry.variants = Object.fromEntries(Object.entries(compiled.variants).map(([host, spec]) => [host, finish(spec)]));
+    const finish = (spec: PluginSpec) => (shadowPreview ? { ...spec, shadow: true } : spec);
+    entry.base = finish(base);
+    entry.variants = Object.fromEntries(Object.entries(variants).map(([host, spec]) => [host, finish(spec)]));
   } catch (error) {
     entry.problem = error instanceof ManifestError ? error.problems.join("; ") : (error as Error).message;
-    if (!existsSync(join(dir, MANIFEST_FILE))) entry.problem = `no ${MANIFEST_FILE}`;
+    if (!flags.problem && !existsSync(join(dir, MANIFEST_FILE))) entry.problem = `no ${MANIFEST_FILE}`;
   }
   return entry;
+}
+
+/**
+ * Trusted when the pin matches the content and approved every capability the
+ * effective spec has, or when auto-trust covers a declarative plugin. A config
+ * override can add a block effect, an event or a script check without touching
+ * the plugin folder, so a matching hash alone is not enough.
+ */
+function trustDecision(input: {
+  id: string;
+  hash: string;
+  capabilities: string[];
+  pinned: TrustEntry | undefined;
+  autoTrustDeclarative: boolean;
+}): { trusted: true } | { trusted: false; problem: string } {
+  const { id, hash, capabilities, pinned, autoTrustDeclarative } = input;
+  if (autoTrustDeclarative && isDeclarativeOnly(capabilities)) return { trusted: true };
+  if (!pinned) return { trusted: false, problem: "not promoted yet" };
+  if (pinned.hash !== hash) return { trusted: false, problem: "content changed since promote" };
+  const added = capabilities.filter((c) => !pinned.capabilities.includes(c));
+  if (added.length === 0) return { trusted: true };
+  return { trusted: false, problem: `config override adds ${added.join(", ")}; run hookmux promote ${id}` };
 }

@@ -1,9 +1,10 @@
 // add, promote, list, remove and the flags they keep, run from source.
 
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, readFileSync, statSync, symlinkSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { activationRefusal, agentMarker } from "../../src/commands/lib/agent-env.ts";
 import { cli, moodboardCopy, sandbox } from "./helpers.ts";
 
 const json = (file: string) => JSON.parse(readFileSync(file, "utf8"));
@@ -69,19 +70,75 @@ test("add --shadow records the shadow flag", async () => {
   assert.deepEqual(json(join(sb.home, "flags.json")).shadow, ["moodboard"]);
 });
 
-test("promote refuses without a terminal, even with --yes", async () => {
+test("promote refuses without a terminal", async () => {
   const sb = sandbox();
   assert.equal((await cli(sb, "add", moodboardCopy(sb))).code, 0);
-  for (const args of [
-    ["promote", "moodboard"],
-    ["promote", "moodboard", "--yes"],
-  ]) {
-    const r = await cli(sb, ...args);
+  const r = await cli(sb, "promote", "moodboard");
+  assert.equal(r.code, 1);
+  assert.match(r.stdout, /✗ promote needs your own terminal/);
+  assert.match(r.stdout, /→ run this yourself in a terminal: hookmux promote moodboard/);
+  assert.ok(!existsSync(join(sb.home, "trust.json")), "nothing was trusted");
+});
+
+test("promote never accepts --yes", async () => {
+  const sb = sandbox();
+  assert.equal((await cli(sb, "add", moodboardCopy(sb))).code, 0);
+  for (const flag of ["--yes", "-y"]) {
+    const r = await cli(sb, "promote", "moodboard", flag);
     assert.equal(r.code, 1);
-    assert.match(r.stdout, /✗ promote needs your own terminal/);
-    assert.match(r.stdout, /→ run this yourself in a terminal: hookmux promote moodboard/);
+    assert.match(r.stdout, /✗ promote does not take --yes: a person types y/);
   }
   assert.ok(!existsSync(join(sb.home, "trust.json")), "nothing was trusted");
+});
+
+test("promote refuses inside an agent client's environment", async () => {
+  const sb = sandbox();
+  assert.equal((await cli(sb, "add", moodboardCopy(sb))).code, 0);
+  for (const marker of ["CLAUDECODE", "CODEX_THREAD_ID", "GEMINI_CLI"]) {
+    const r = await cli({ ...sb, env: { ...sb.env, [marker]: "1" } }, "promote", "moodboard");
+    assert.equal(r.code, 1);
+    assert.match(r.stdout, new RegExp(`✗ promote refuses to run inside an agent client \\(${marker} is set\\)`));
+  }
+  assert.ok(!existsSync(join(sb.home, "trust.json")), "nothing was trusted");
+});
+
+test("activation is refused for --yes, then agent markers, then a missing terminal, even on a TTY", () => {
+  const tty = { interactive: true, env: {} };
+  assert.equal(activationRefusal({ ...tty, assumeYes: false }), undefined);
+  assert.equal(activationRefusal({ ...tty, assumeYes: true }), "yes-flag");
+  assert.equal(activationRefusal({ ...tty, assumeYes: false, env: { CLAUDE_CODE_ENTRYPOINT: "cli" } }), "agent");
+  assert.equal(activationRefusal({ ...tty, assumeYes: false, env: { CODEX_SANDBOX: "seatbelt" } }), "agent");
+  assert.equal(activationRefusal({ assumeYes: false, interactive: false, env: {} }), "no-terminal");
+  assert.equal(
+    agentMarker({ CODEX_HOME: "/x", CLAUDECODE: "" }),
+    undefined,
+    "CODEX_HOME and empty values are not markers",
+  );
+});
+
+test("a corrupt flags.json makes writers refuse instead of re-enabling plugins", async () => {
+  const sb = sandbox();
+  assert.equal((await cli(sb, "add", moodboardCopy(sb))).code, 0);
+  assert.equal((await cli(sb, "disable", "moodboard")).code, 0);
+  writeFileSync(join(sb.home, "flags.json"), "{ not json");
+  for (const args of [
+    ["enable", "moodboard"],
+    ["remove", "moodboard"],
+    ["add", moodboardCopy(sb, "again"), "--force"],
+  ]) {
+    const r = await cli(sb, ...args);
+    assert.equal(r.code, 1, args.join(" "));
+    assert.match(r.stderr, /flags\.json is unreadable; fix or delete it/);
+  }
+  assert.equal(
+    readFileSync(join(sb.home, "flags.json"), "utf8"),
+    "{ not json",
+    "the corrupt file is left for the user",
+  );
+  const list = JSON.parse((await cli(sb, "list", "--json")).stdout);
+  assert.equal(list.plugins[0].status, "invalid");
+  const doctor = await cli(sb, "doctor");
+  assert.match(doctor.stdout, /moodboard is invalid: flags\.json is unreadable; fix or delete it/);
 });
 
 test("disable and enable edit flags; remove deletes the plugin and its records", async () => {

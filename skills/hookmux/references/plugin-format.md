@@ -59,7 +59,7 @@ TOML literal strings (`'...'`) keep regular expressions readable, because backsl
 | `origins`          | list           | see below  | Prompt origins the plugin runs on: `user`, `system`, `unknown`.                                |
 | `dedupe`           | string         | `"none"`   | `"session"` fires the plugin at most once per session.                                         |
 | `exclusive`        | string         | none       | Group name. Of the plugins in one group that fire, only the first in output order contributes. |
-| `on_error`         | string         | `"open"`   | `"block"` makes an undecided plugin fire anyway. It needs a block effect.                      |
+| `on_error`         | string         | `"open"`   | Only `"open"` is accepted, and it changes nothing: hookmux always fails open.                  |
 | `when`             | string         | required   | Expression over the plugin's checks that decides whether it fires.                             |
 | `when_degraded`    | string         | none       | Fallback expression, used when `when` stays unknown.                                           |
 | `params`           | table          | `{}`       | Strings, numbers or booleans for templates, stored as strings.                                 |
@@ -113,7 +113,7 @@ These are the kinds in this version. The authoring skill's `references/check-kin
 | `tool`         | 0 (in-process) | no           | True when the tool call names one of these tools (canonical or host name).                                                            |
 <!-- check-kinds:end -->
 
-Pattern checks cut their input to 8,000 characters before matching, and accept at most 200 patterns of up to 300 characters each. Flags default to `iu` (case-insensitive, Unicode). JavaScript's `\b` only knows ASCII letters, so put it next to ASCII characters only; the `keywords` kind handles word edges for any script.
+Pattern checks cut their input to 8,000 characters before matching, and accept at most 200 patterns of up to 300 characters each. A pattern that repeats a group which already repeats, such as `(a+)+` or `(\w+\s?)+`, is rejected, because it can take exponential time on some input. The check is a heuristic; the launcher's watchdog is what stops a hook run that hangs. Flags default to `iu` (case-insensitive, Unicode). JavaScript's `\b` only knows ASCII letters, so put it next to ASCII characters only; the `keywords` kind handles word edges for any script.
 
 ## Effects
 
@@ -151,7 +151,7 @@ Evaluation uses three-valued logic, so an unknown signal only matters when it co
 
 This is also why the order of terms does not matter. `cheap and costly` and `costly and cheap` both skip `costly` when `cheap` is false.
 
-When `when` is true the plugin fires, and when it is false the plugin stays silent. When it stays unknown, the engine evaluates `when_degraded`. If that is unknown too, or missing, the plugin contributes nothing, unless `on_error = "block"`, in which case it fires. A plugin that adds a model check should set `when_degraded` to a rules-only expression, or to `"false"` to stay quiet when the model is unavailable.
+When `when` is true the plugin fires, and when it is false the plugin stays silent. When it stays unknown, the engine evaluates `when_degraded`. If that is unknown too, or missing, the plugin contributes nothing. A failed check never makes a plugin fire, so an error can never block the agent. A plugin that adds a model check should set `when_degraded` to a rules-only expression, or to `"false"` to stay quiet when the model is unavailable.
 
 All checks share one deadline, `deadline_ms` (2,000 ms by default). Checks still running at the deadline become unknown.
 
@@ -257,8 +257,14 @@ expect = "silent"
 
 `hookmux test` runs them. Write both kinds of case, in each language you write prompts in, and include the near misses you worry about.
 
+`hookmux test` runs a plugin's scripts only once it is promoted. For a folder, or an installed plugin nobody promoted yet, script checks give unknown and their cases count as skipped. Pass `--run-scripts` to run them, which executes the scripts on disk as they are now. `hookmux explain --all` follows the same rule for unpromoted plugins.
+
+A script runs from a private copy of the bytes that matched its hash, in `~/.hookmux/cache/scripts`, so `$0` is not inside the plugin folder. Find files next to the script through `$HOOKMUX_PLUGIN_DIR`.
+
 ## Trust
 
-`hookmux promote <id>` records a SHA-256 hash of the plugin folder. If any file in the folder changes afterwards, the plugin stops running until you promote it again. Promote needs an interactive terminal, so an agent cannot approve its own plugin.
+`hookmux promote <id>` records a SHA-256 hash of the plugin folder and the capabilities it has with your `config.toml` overrides applied. If any file in the folder changes afterwards, or an override adds a capability (an event, a block effect, a script or model check), the plugin stops running until you promote it again.
+
+Promote asks you to type `y` and never takes `--yes`. It refuses when stdin is not a terminal, and when it finds the environment variables Claude Code, Codex or Gemini CLI set on the commands they run, even on a terminal. That is a checkpoint against an agent activating a plugin because of an injected instruction or by accident. It is not a sandbox: a process running as you can still edit `trust.json` or clear its environment.
 
 With `auto_trust_declarative = true`, plugins whose effects are only inject or notify and that run no scripts are trusted without promote. Plugins that block or run a script always need it.

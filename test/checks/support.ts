@@ -55,7 +55,6 @@ export function pluginSpec(
     when: Object.keys(checks)[0] ?? "true",
     effects: [],
     dedupe: "none",
-    onError: "open",
     params: { greeting: "hi" },
     ...(fileHashes ? { fileHashes } : {}),
   };

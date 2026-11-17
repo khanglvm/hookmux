@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -163,15 +163,36 @@ test("the hub deadline abort kills the process group at once", async () => {
   await assertDead([readPid(gc), readPid(child)]);
 });
 
-test("a background process left behind after a normal exit is killed", async () => {
+test("a background process left behind after a normal exit does not delay the result", async () => {
+  // Once the script exits, its leftover is reparented and no longer findable as its
+  // descendant; it stays in the hook's process group for the host to reap.
   const f = fixture({ "bg.sh": sh(`sleep 30 &\necho $! > "$1"\necho '{"value": true}'`) });
   const gc = join(f.scratch, "gc.pid");
   const started = performance.now();
-  assert.equal((await f.run({ command: "bg.sh", args: [gc], timeout_ms: 5000 })).value, true);
-  assert.ok(performance.now() - started < 2000, "the leftover sleep held stdout open");
-  await assertDead([readPid(gc)]);
+  try {
+    assert.equal((await f.run({ command: "bg.sh", args: [gc], timeout_ms: 5000 })).value, true);
+    assert.ok(performance.now() - started < 1000, "the leftover sleep held stdout open");
+  } finally {
+    process.kill(readPid(gc), "SIGKILL");
+  }
 });
 
+test("the verified bytes run from a private content-addressed copy", async () => {
+  const body = sh(`printf '%s\\n%s' "$0" "$HOOKMUX_PLUGIN_DIR" > "$1"`);
+  const f = fixture({ "where.sh": body });
+  const out = join(f.scratch, "where.txt");
+  assert.equal((await f.run({ command: "where.sh", args: [out] })).value, true);
+  const copy = join(
+    process.env.HOOKMUX_HOME as string,
+    "cache",
+    "scripts",
+    createHash("sha256").update(body).digest("hex"),
+  );
+  assert.deepEqual(readFileSync(out, "utf8").split("\n"), [copy, f.dir]);
+  assert.equal(readFileSync(copy, "utf8"), body);
+  assert.equal(statSync(copy).mode & 0o777, 0o700);
+  assert.equal(statSync(dirname(copy)).mode & 0o777, 0o700);
+});
 test("no time left means the script never starts", async () => {
   const f = fixture({ "mark.sh": sh(`touch "$1"`) });
   const marker = join(f.scratch, "ran");
