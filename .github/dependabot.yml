@@ -1,0 +1,24 @@
+# Weekly grouped updates. The 7-day cooldown matches minimumReleaseAge in
+# pnpm-workspace.yaml, so Dependabot never proposes a version pnpm would refuse.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        patterns: ["*"]

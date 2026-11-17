@@ -1,0 +1,80 @@
+# Release flow: release-please keeps a release PR open from Conventional Commit
+# messages on main. Merging it tags the release, and the publish job below
+# ships that tag to npm through trusted publishing (OIDC), with no npm token.
+#
+# One-time bootstrap. npm can only attach a trusted publisher to a package
+# that already exists, so the first version goes out by hand:
+#   1. From a clean checkout of main, on an npm account with 2FA:
+#        pnpm install --frozen-lockfile && pnpm build && pnpm test
+#        npm publish --access public
+#      Then tag that commit `v0.1.0` and push the tag, so release-please starts
+#      counting commits from it. .release-please-manifest.json is already 0.1.0.
+#   2. In GitHub: Settings > Actions > General, allow GitHub Actions to create
+#      and approve pull requests (release-please opens the release PR).
+#   3. When the next release PR is ready to merge, and not before: on
+#      npmjs.com, hookmux > Settings > Trusted publishing > GitHub Actions, set
+#      owner `khanglvm`, repository `hookmux`, workflow `release.yml`, and tick
+#      "allow npm publish". An unused configuration expires after 2 days.
+#   4. Merge the release PR. After one successful publish, set the package's
+#      publishing access to "Require two-factor authentication and disallow
+#      tokens"; trusted publishing keeps working.
+# npm adds provenance on its own once the repository is public. Leave out
+# --provenance and publishConfig.provenance: npm generates none from a private
+# repository, and asking for it there has been reported to fail the publish.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Separate job, so the write permissions above and id-token below never meet.
+  publish:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      # Node 24 bundles npm 11, which trusted publishing needs (11.5.1 or later).
+      # No dependency cache in a publish job: a poisoned cache could reach the OIDC token.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
+      - run: pnpm smoke
+      - run: node .github/scripts/check-package.mjs
+      # npm, not pnpm: npm's OIDC support is documented; pnpm's is not.
+      - run: npm publish --access public

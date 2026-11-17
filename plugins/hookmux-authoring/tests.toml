@@ -1,0 +1,119 @@
+# Cases for `hookmux test hookmux-authoring`.
+
+# Should fire: explicit hook requests and standing rules, English and Vietnamese.
+[[case]]
+prompt = "make a hook that reminds me to update the changelog when I mention a release"
+expect = "fire"
+
+[[case]]
+prompt = "Create a hook to block prompts that contain an API key"
+expect = "fire"
+
+[[case]]
+prompt = "can you set up a hook so the agent suggests running the tests before a commit?"
+expect = "fire"
+
+[[case]]
+prompt = "add a hook that warns me before any git push --force"
+expect = "fire"
+
+[[case]]
+prompt = "I want a hook that blocks rm -rf in shell commands"
+expect = "fire"
+
+[[case]]
+prompt = "write a hookmux plugin that adds our markdown style guide to the context"
+expect = "fire"
+
+[[case]]
+prompt = "whenever I mention production, warn me to double-check the target environment"
+expect = "fire"
+
+[[case]]
+prompt = "every time I ask for a database migration, remind me to write the rollback too"
+expect = "fire"
+
+[[case]]
+prompt = "tạo hook nhắc tôi chạy test trước khi commit"
+expect = "fire"
+
+[[case]]
+prompt = "mỗi khi tôi nhắc đến deploy, hãy cảnh báo tôi kiểm tra môi trường staging"
+expect = "fire"
+
+[[case]]
+prompt = "bất cứ khi nào tôi hỏi về cơ sở dữ liệu, hãy gợi ý đọc schema trước"
+expect = "fire"
+
+[[case]]
+prompt = "remind me to update the API docs whenever I change an endpoint"
+expect = "fire"
+
+[[case]]
+prompt = "nhắc tôi cập nhật tài liệu mỗi khi tôi đổi API"
+expect = "fire"
+
+# Should stay silent: code hooks, webhooks and ordinary "every time" sentences.
+[[case]]
+prompt = "write a React hook useDebounce for the search box"
+expect = "silent"
+
+[[case]]
+prompt = "this useEffect hook runs every time the component renders, can you fix it?"
+expect = "silent"
+
+[[case]]
+prompt = "create a custom hook for form state in React"
+expect = "silent"
+
+[[case]]
+prompt = "debug why the git pre-commit hook fails on lint"
+expect = "silent"
+
+[[case]]
+prompt = "add a hook to the husky config so lint runs before push"
+expect = "silent"
+
+[[case]]
+prompt = "add a webhook handler for Stripe payment events"
+expect = "silent"
+
+[[case]]
+prompt = "the webhook endpoint returns 500 every time I resend the event"
+expect = "silent"
+
+[[case]]
+prompt = "every time I run the tests on CI they fail with a timeout"
+expect = "silent"
+
+[[case]]
+prompt = "every time I open the app I get a warning about cookies"
+expect = "silent"
+
+[[case]]
+prompt = "explain how lifecycle hooks work in Vue"
+expect = "silent"
+
+[[case]]
+prompt = "tạo hook React useFetch để gọi API"
+expect = "silent"
+
+[[case]]
+prompt = "mỗi khi tôi chạy build nó hiện cảnh báo deprecated, sửa giúp tôi"
+expect = "silent"
+
+[[case]]
+prompt = "tell me why the build fails every time I push"
+expect = "silent"
+
+[[case]]
+prompt = "can you suggest a fix? it crashes every time I open settings"
+expect = "silent"
+
+[[case]]
+prompt = "why does eslint warn every time I save"
+expect = "silent"
+
+[[case]]
+prompt = "every time I push the build fails, can you suggest a fix?"
+expect = "silent"
