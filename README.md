@@ -1,8 +1,10 @@
-# hookmux
+<p align="center"><img src=".github/assets/cover.png" alt="hookmux: one hook for every coding agent" width="100%"></p>
+
+# <img src=".github/assets/icon-256.png" alt="" width="36" align="top"> hookmux
 
 hookmux gives Claude Code, Codex and Gemini CLI one hook entry per event and fans each event out to small TOML plugins that add context for the agent or block a prompt or tool call. It is for people who use one or more of these agents and want automatic reminders, skill suggestions and guards without writing a separate script for each client.
 
-The Claude Code adapter follows Claude Code's hooks reference and is covered by the test suite. The Codex and Gemini CLI adapters were written from those clients' source code and have not been run against a live client yet.
+Claude Code (2.1.325) and Codex (0.167.1) have been tested live: adding context and blocking a prompt both work. The Gemini CLI adapter was written from the Gemini CLI source (v0.68.0) and is covered by tests, but has not been run against a live client yet.
 
 ## Install
 
