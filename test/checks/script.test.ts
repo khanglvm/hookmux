@@ -163,18 +163,13 @@ test("the hub deadline abort kills the process group at once", async () => {
   await assertDead([readPid(gc), readPid(child)]);
 });
 
-test("a background process left behind after a normal exit does not delay the result", async () => {
-  // Once the script exits, its leftover is reparented and no longer findable as its
-  // descendant; it stays in the hook's process group for the host to reap.
+test("a background process left behind after a normal exit is killed with the script's group", async () => {
   const f = fixture({ "bg.sh": sh(`sleep 30 &\necho $! > "$1"\necho '{"value": true}'`) });
   const gc = join(f.scratch, "gc.pid");
   const started = performance.now();
-  try {
-    assert.equal((await f.run({ command: "bg.sh", args: [gc], timeout_ms: 5000 })).value, true);
-    assert.ok(performance.now() - started < 1000, "the leftover sleep held stdout open");
-  } finally {
-    process.kill(readPid(gc), "SIGKILL");
-  }
+  assert.equal((await f.run({ command: "bg.sh", args: [gc], timeout_ms: 5000 })).value, true);
+  assert.ok(performance.now() - started < 1000, "the leftover sleep held stdout open");
+  await assertDead([readPid(gc)]);
 });
 
 test("the verified bytes run from a private content-addressed copy", async () => {

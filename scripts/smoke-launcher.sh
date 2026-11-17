@@ -112,6 +112,23 @@ run_open_stdin_case() {
   [ "$failures" -ne "$before" ] || echo "ok: $name"
 }
 
+# With stdin closed the launcher cannot keep a copy of it on fd 5 and gives up
+# after mktemp; it must still exit 0 quietly and remove the temp file it made.
+run_closed_stdin_case() {
+  shell=$1
+  name="stdin closed ($shell)"
+  before=$failures
+  started=$(now_ms)
+  set +e
+  out=$("$shell" "$HOME_DIR/bin/hookmux-hook" $PROMPT_EVENT <&-)
+  code=$?
+  set -e
+  check_result "$name" empty "$code" "$out" "$started" ""
+  leftover=$(cd "$TMPDIR" && find . -name 'hookmux-out.*')
+  [ -z "$leftover" ] || fail "$name: temp file left behind: $leftover"
+  [ "$failures" -ne "$before" ] || echo "ok: $name"
+}
+
 is_json() {
   printf '%s' "$1" | "$NODE_BIN" -e 'JSON.parse(require("fs").readFileSync(0, "utf8"))' 2>/dev/null
 }
@@ -132,6 +149,7 @@ run_suite() {
   run_case "$sh_bin" "$launcher" "firing prompt" context "$(payload "$FIRING_PROMPT")"
   run_case "$sh_bin" "$launcher" "stdin is not JSON" empty "not json"
   run_case "$sh_bin" "$launcher" "empty stdin" empty ""
+  run_closed_stdin_case "$sh_bin"
 
   sed -e "s|^NODE=.*|NODE='$HOME_DIR/no-such-node'|" "$launcher" >"$HOME_DIR/bin/no-node-hook"
   run_case "$sh_bin" "$HOME_DIR/bin/no-node-hook" "node missing" empty "$(payload "$FIRING_PROMPT")"

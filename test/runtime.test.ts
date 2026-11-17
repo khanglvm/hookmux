@@ -8,7 +8,6 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { isCoolingDown, recordFailure, recordSuccess } from "../src/providers/breaker.ts";
 import { appendLog, LOG_ROTATE_BYTES } from "../src/runtime/log.ts";
-import { descendantsOf, parseProcessTable } from "../src/runtime/process-tree.ts";
 import { pruneSessions, readFired, recordFired } from "../src/runtime/state.ts";
 
 const temp = (name: string) => mkdtempSync(join(tmpdir(), `hookmux-${name}-`));
@@ -74,11 +73,4 @@ test("a stale rotation lock is replaced, the log rotates and the lock is removed
   assert.equal(readFileSync(`${file}.1`, "utf8").length, LOG_ROTATE_BYTES);
   assert.equal(readFileSync(file, "utf8"), "line\n");
   assert.equal(existsSync(`${file}.lock`), false);
-});
-
-test("descendants are found through every generation of one ps snapshot", () => {
-  const table = parseProcessTable(" 10   1\n 20  10\n 30  20\n 31  20\n 40   1\nheader line\n 50  50\n");
-  assert.deepEqual(descendantsOf(10, table), [20, 30, 31]);
-  assert.deepEqual(descendantsOf(40, table), []);
-  assert.deepEqual(descendantsOf(50, table), [], "a process listed as its own parent is not its own child");
 });

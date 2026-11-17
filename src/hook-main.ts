@@ -14,7 +14,7 @@ import { activeSpecs, loadRegistry } from "./load/snapshot.ts";
 import { recordFailures } from "./runtime/health.ts";
 import { appendLog, buildLogLine, loggingActive, readLogSettings } from "./runtime/log.ts";
 import { homePaths } from "./runtime/paths.ts";
-import { killTrackedChildren } from "./runtime/process-tree.ts";
+import { killTrackedGroups } from "./runtime/process-group.ts";
 import { readFired, recordFired } from "./runtime/state.ts";
 import { readStdin } from "./runtime/stdin.ts";
 
@@ -159,12 +159,12 @@ function exit(): never {
 
 /**
  * A host that gives up on the hook (its own timeout, or the user interrupting)
- * sends a signal. Scripts the hook started die with it, and the answer is the
- * same empty no-op as every other failure.
+ * sends a signal. The process groups of the scripts the hook started die with
+ * it, and the answer is the same empty no-op as every other failure.
  */
 function onHostSignal(): void {
   try {
-    killTrackedChildren();
+    killTrackedGroups();
   } finally {
     finish();
   }

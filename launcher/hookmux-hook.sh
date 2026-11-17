@@ -28,9 +28,13 @@ fi
 # left in TMPDIR even if this script is killed; fd 3 reads the answer back.
 # fd 5 keeps the client's stdin for the engine (see below). `command` keeps a
 # failed redirection from ending the shell with status 2, which Claude Code
-# would read as a block.
+# would read as a block; the temp file is removed before leaving. The fd 5 copy
+# fails when the client started the hook with stdin closed.
 out=$(mktemp "${TMPDIR:-/tmp}/hookmux-out.XXXXXX") || exit 0
-command exec 3<"$out" 4>"$out" 5<&0 || exit 0
+command exec 3<"$out" 4>"$out" 5<&0 || {
+  rm -f "$out"
+  exit 0
+}
 
 # NODE_OPTIONS could load code into the engine, and NODE_USE_ENV_PROXY would
 # send a local model provider's traffic (the prompt) through an HTTP proxy.

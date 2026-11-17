@@ -1,18 +1,20 @@
 // Runs one script process for the script check: pipes the event in, collects a
 // capped stdout, and stops it on timeout, deadline or oversized output. The
-// script is not detached, so it stays in the hook's process group and a host
-// that kills that group on its own timeout reaches the script as well.
+// script leads its own process group, and that whole group is killed once the
+// script exits or is stopped, so nothing it left running in the background
+// outlives the check (process-group.ts has the one case that escapes this).
 
 import { type ChildProcess, spawn } from "node:child_process";
-import { killTree, trackChild, untrackChild } from "../runtime/process-tree.ts";
+import { killGroup, trackGroup, untrackGroup } from "../runtime/process-group.ts";
 
 export const MAX_STDOUT_BYTES = 64 * 1024;
 /** Only this much stderr is kept, and only for the error message. */
 const STDERR_KEEP_CHARS = 300;
 /**
- * How long to wait for stdout to close after the script exits. A background
- * process the script left behind can hold the pipe open for its whole life;
- * past this grace the result is taken without it.
+ * How long to wait for stdout to close after the script exits. The group kill
+ * ends leftovers in the script's group at once, but one that moved to another
+ * group (setsid) can hold the pipe open for its whole life; past this grace the
+ * result is taken without it.
  */
 const PIPE_GRACE_MS = 50;
 
@@ -62,26 +64,42 @@ export function runProcess(run: ProcessRun): Promise<ProcessResult> {
 function spawnScript(run: ProcessRun): ChildProcess | string {
   try {
     // The file itself is executed (shebang plus executable bit), with no shell.
-    return spawn(run.file, run.args, { cwd: run.cwd, env: run.env, stdio: "pipe" });
+    // `detached` makes the script a process group leader, so its pid is the group id.
+    return spawn(run.file, run.args, { cwd: run.cwd, env: run.env, stdio: "pipe", detached: true });
   } catch (error) {
     return `cannot run script: ${(error as Error).message}`;
   }
 }
 
+/**
+ * Tracks the script's group and returns a function that kills it, synchronously,
+ * the first time it is called. The group is signalled once only: its id stays
+ * reserved while any member lives, but once the group is empty the number can be
+ * reused, so a later kill could hit a stranger.
+ */
+function groupKiller(pgid: number | undefined): () => void {
+  if (pgid === undefined) return () => {};
+  trackGroup(pgid);
+  let killed = false;
+  return () => {
+    if (killed) return;
+    killed = true;
+    untrackGroup(pgid);
+    killGroup(pgid);
+  };
+}
+
 /** Feeds the script its stdin, enforces the budget and the output cap, and reports once. */
 function supervise(child: ChildProcess, run: ProcessRun, done: (result: ProcessResult) => void): void {
-  const pid = child.pid;
-  if (pid !== undefined) trackChild(pid);
+  // Kills synchronously: the engine stops awaiting this check the moment the deadline aborts.
+  const killScriptGroup = groupKiller(child.pid);
   let failure: string | undefined;
   let settled = false;
   let exitCode: number | null = null;
-  let exited = false;
 
-  // Kills synchronously: the engine stops awaiting this check the moment the deadline aborts.
   const stop = (reason: string) => {
     failure ??= reason;
-    // Once the script has exited its pid may be reused, so only a live script is killed.
-    if (pid !== undefined && !exited) killTree(pid);
+    killScriptGroup();
   };
   const onAbort = () => stop("deadline reached");
   const timer = setTimeout(() => stop(`timed out after ${run.budgetMs} ms`), run.budgetMs);
@@ -93,7 +111,7 @@ function supervise(child: ChildProcess, run: ProcessRun, done: (result: ProcessR
     settled = true;
     clearTimeout(timer);
     run.signal.removeEventListener("abort", onAbort);
-    if (pid !== undefined) untrackChild(pid);
+    killScriptGroup();
     child.stdout?.destroy();
     child.stderr?.destroy();
     done({ exitCode, stdout: output.stdout(), stderr: output.stderr(), ...(failure ? { failure } : {}) });
@@ -106,10 +124,10 @@ function supervise(child: ChildProcess, run: ProcessRun, done: (result: ProcessR
     finish();
   });
   child.on("exit", (code) => {
-    exited = true;
     exitCode = code;
-    if (pid !== undefined) untrackChild(pid);
-    // `close` normally follows at once; a leftover background process holding the pipe would delay it.
+    // A normal exit still ends whatever the script left running in its group.
+    killScriptGroup();
+    // `close` normally follows at once; a leftover that escaped the group and holds the pipe would delay it.
     setTimeout(finish, PIPE_GRACE_MS);
   });
   child.on("close", finish);

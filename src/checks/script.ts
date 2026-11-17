@@ -2,8 +2,9 @@
 // tier-1 subprocess. Right before it runs, the file is read once, hashed
 // against the hash recorded when the plugin was promoted, and a private copy of
 // exactly those bytes is executed. The script gets a scrubbed environment and
-// the event as JSON on stdin. On timeout, deadline or oversized output it is
-// killed with everything it started (script-process.ts).
+// the event as JSON on stdin. It runs in a process group of its own, which is
+// killed when it exits, times out, overruns the deadline or floods stdout
+// (script-process.ts).
 
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";

@@ -70,6 +70,26 @@ interface ScriptAccess {
   fileHashes?: Record<string, string>;
 }
 
+/** The base spec and per-host variants a plugin's cases run against. */
+interface CompiledSpecs {
+  base: PluginSpec;
+  variants: Record<string, PluginSpec>;
+}
+
+/** A promoted install's specs and hashes, taken from the registry. */
+interface PromotedSpecs extends CompiledSpecs {
+  id: string;
+  fileHashes: Record<string, string>;
+}
+
+interface TestTarget {
+  dir: string;
+  overrides: Record<string, Record<string, unknown>>;
+  scripts: ScriptAccess;
+  /** Set for a promoted install: its manifest is not read again. */
+  promoted?: PromotedSpecs;
+}
+
 interface Summary {
   passed: number;
   failed: number;
@@ -94,12 +114,11 @@ export async function run(argv: string[]): Promise<number> {
   const reports: PluginReport[] = [];
   for (const { dir, installed } of targets) {
     const entry = installed ? registry.plugins.find((p) => p.id === basename(dir)) : undefined;
-    reports.push(
-      await testPlugin(
-        { dir, overrides: installed ? config.overrides : {}, scripts: scriptAccess(dir, entry, runScripts) },
-        { defaults: loadDefaults(config), settings },
-      ),
-    );
+    const promoted = promotedSpecs(entry);
+    const target: TestTarget = promoted
+      ? { dir, overrides: {}, scripts: { preview: false, fileHashes: promoted.fileHashes }, promoted }
+      : { dir, overrides: installed ? config.overrides : {}, scripts: scriptAccess(dir, entry, runScripts) };
+    reports.push(await testPlugin(target, { defaults: loadDefaults(config), settings }));
   }
   const all = reports.flatMap((r) => r.cases);
   const summary: Summary = {
@@ -128,12 +147,21 @@ function resolveTargets(arg: string | undefined, pluginsDir: string): { dir: str
 }
 
 /**
- * A promoted install runs its scripts against the registry's hashes, as the hook
- * would. Anything else is stubbed unless --run-scripts, which hashes what is on
- * disk now, since nobody pinned it.
+ * A promoted install is tested from the specs and hashes the registry compiled,
+ * exactly what the hook runs. Its manifest is never read again: an edit made
+ * after compiling (by a script tested earlier in this run, say) could otherwise
+ * point a check at another file the promote-time hashes also cover.
+ */
+function promotedSpecs(entry: RegistryPlugin | undefined): PromotedSpecs | undefined {
+  if (entry?.status !== "active" || !entry.trusted || !entry.base || !entry.fileHashes) return undefined;
+  return { id: entry.id, base: entry.base, variants: entry.variants ?? {}, fileHashes: entry.fileHashes };
+}
+
+/**
+ * Scripts of anything not promoted are stubbed unless --run-scripts, which
+ * hashes what is on disk now, since nobody pinned it.
  */
 function scriptAccess(dir: string, entry: RegistryPlugin | undefined, runScripts: boolean): ScriptAccess {
-  if (entry?.trusted && entry.fileHashes) return { preview: false, fileHashes: entry.fileHashes };
   if (!runScripts) return { preview: true };
   try {
     return { preview: false, fileHashes: entry?.fileHashes ?? fileHashesOf(readPluginFiles(dir).files) };
@@ -144,21 +172,14 @@ function scriptAccess(dir: string, entry: RegistryPlugin | undefined, runScripts
 }
 
 async function testPlugin(
-  target: { dir: string; overrides: Record<string, Record<string, unknown>>; scripts: ScriptAccess },
+  target: TestTarget,
   ctx: { defaults: ReturnType<typeof loadDefaults>; settings: ReturnType<typeof engineSettings> },
 ): Promise<PluginReport> {
-  const { dir, overrides, scripts } = target;
-  const { defaults, settings } = ctx;
-  const report: PluginReport = { id: basename(dir), path: dir, problems: [], cases: [] };
-  let compiled: ReturnType<typeof compileManifest>;
-  try {
-    const raw = readManifest(dir);
-    if (typeof raw.id === "string") report.id = raw.id;
-    compiled = compileManifest(raw, dir, overrides[report.id], defaults);
-  } catch (error) {
-    report.problems = error instanceof ManifestError ? error.problems : [(error as Error).message];
-    return report;
-  }
+  const { dir, scripts } = target;
+  const { settings } = ctx;
+  const report: PluginReport = { id: target.promoted?.id ?? basename(dir), path: dir, problems: [], cases: [] };
+  const compiled = target.promoted ?? compileFromDisk(target, ctx.defaults, report);
+  if (!compiled) return report;
   const testsFile = join(dir, TESTS_FILE);
   if (!existsSync(testsFile)) {
     report.untested = true;
@@ -172,6 +193,22 @@ async function testPlugin(
     report.cases.push(await runCase(i + 1, c, withHashes, { settings, preview: scripts.preview }));
   }
   return report;
+}
+
+/** Reads and compiles the manifest of a plugin that is not promoted; on failure records why in `report`. */
+function compileFromDisk(
+  target: TestTarget,
+  defaults: ReturnType<typeof loadDefaults>,
+  report: PluginReport,
+): CompiledSpecs | undefined {
+  try {
+    const raw = readManifest(target.dir);
+    if (typeof raw.id === "string") report.id = raw.id;
+    return compileManifest(raw, target.dir, target.overrides[report.id], defaults);
+  } catch (error) {
+    report.problems = error instanceof ManifestError ? error.problems : [(error as Error).message];
+    return undefined;
+  }
 }
 
 async function runCase(
