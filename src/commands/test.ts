@@ -142,14 +142,10 @@ async function runCase(
   const trace = result.trace.find((t) => t.id === spec.id);
   const outcome = trace?.outcome ?? "not-selected";
   const signals = trace?.signals ?? {};
-  const fired = outcome === "fire";
   const stubbed = Object.values(signals).some((s) => s.error === STUBBED_MODEL_ERROR);
-  const status: CaseStatus =
-    outcome === "unknown" && stubbed
-      ? "skip"
-      : fired === (c.expect === "fire") && outcome !== "error"
-        ? "pass"
-        : "fail";
+  // Only a clean decision passes: an unknown outcome (a check errored) is not "silent".
+  const expected = c.expect === "fire" ? outcome === "fire" : outcome === "silent" || outcome === "not-selected";
+  const status: CaseStatus = outcome === "unknown" && stubbed ? "skip" : expected ? "pass" : "fail";
   const note =
     trace?.note ?? (outcome === "not-selected" ? "plugin does not listen to this host, event or origin" : undefined);
   return {

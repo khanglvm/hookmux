@@ -8,7 +8,7 @@ import { join, resolve } from "node:path";
 import type { HostAdapter } from "../hosts/types.ts";
 import { type HomePaths, homePaths } from "../runtime/paths.ts";
 import { parseCommand } from "./lib/args.ts";
-import { allAdapters, printHostResults } from "./lib/hosts.ts";
+import { allAdapters, printHostResults, wiredAdapters } from "./lib/hosts.ts";
 import { say } from "./lib/output.ts";
 import { confirm, isInteractive } from "./lib/prompt.ts";
 import { adapterOrUsage } from "./lib/run.ts";
@@ -52,8 +52,11 @@ export async function run(argv: string[]): Promise<number> {
     );
   }
   if (!parsed.values.purge) return ok ? 0 : 1;
-  if (!ok) {
-    say("fail", "home folder kept because a host still has hub entries", "fix the host config, then re-run");
+  // Deleting the home while any host still has entries would leave it calling a missing launcher.
+  const stillWired = wiredAdapters(paths);
+  if (!ok || stillWired.length > 0) {
+    const which = stillWired.map((a) => a.id).join(", ") || "a host";
+    say("fail", `home folder kept: ${which} still has hub entries`, "hookmux uninstall --purge");
     return 1;
   }
   return purge(paths, parsed.values.yes === true);
