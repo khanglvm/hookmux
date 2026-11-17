@@ -1,13 +1,15 @@
 # OpenSSF Scorecard, kept in its own file because publishing results limits
 # the workflow to approved steps with no top-level env or defaults. Scorecard
-# needs a public repository (or Advanced Security), so the job skips while the
-# repository is private. A schedule trigger can be added once it is public;
-# it is left out now because the guard reads github.event.repository.
+# needs a public repository (or Advanced Security), so the job skips if the
+# repository goes private. A schedule event carries no repository payload, so
+# the guard passes there and the weekly run always happens.
 name: scorecard
 
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"
   branch_protection_rule:
   workflow_dispatch:
 
