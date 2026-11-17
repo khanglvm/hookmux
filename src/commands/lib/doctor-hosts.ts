@@ -91,6 +91,9 @@ async function liveRun(adapter: HostAdapter, paths: HomePaths): Promise<Finding>
       timeout: LIVE_TIMEOUT_MS,
       env,
     });
+    // The launcher exits without reading stdin when Node or the engine is missing,
+    // so the write can hit a closed pipe; that is a finding, not a doctor crash.
+    pending.child.stdin?.on("error", () => {});
     pending.child.stdin?.end(JSON.stringify(payload));
     const { stdout } = await pending;
     const ms = Math.round(performance.now() - started);
