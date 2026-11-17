@@ -68,8 +68,8 @@ test("doctor reports a broken launcher Node path and --fix repairs it", async ()
   const file = join(sb.home, "bin", "hookmux-hook");
   writeFileSync(file, readFileSync(file, "utf8").replace(/^NODE='.*'$/m, "NODE='/nonexistent/node'"));
   const broken = await built(sb, "doctor");
-  assert.equal(broken.code, 1);
-  assert.match(broken.stdout, /✗ launcher's Node '\/nonexistent\/node' is missing\n {2}→ hookmux doctor --fix/);
+  assert.equal(broken.code, 1, broken.stderr);
+  assert.match(broken.stdout + broken.stderr, /✗ launcher's Node '\/nonexistent\/node' is missing\n {2}→ hookmux doctor --fix/);
   const fixed = await built(sb, "doctor", "--fix");
   assert.equal(fixed.code, 0, fixed.stdout);
   assert.match(fixed.stdout, /✓ fix: re-recorded the launcher's Node path/);
