@@ -134,11 +134,19 @@ function compileOne({ id, dir, config, flags, pinned, sources }: CompileInput): 
 }
 
 /**
- * Security: a `[host.<id>]` table or a config.toml override can change phase without promote, so a plugin
- * that is a guard in its manifest or on any host stays a guard for HOOKMUX_DISABLE and the off notice.
+ * Security: a config.toml override can change phase without promote, so a plugin that is a guard in its
+ * manifest, in one of its `[host.<id>]` tables or on any compiled host stays a guard for HOOKMUX_DISABLE and the
+ * off notice.
  */
 function guardOnAnyLayer(raw: RawManifest, compiled: CompiledPlugin): boolean {
-  return [raw.phase, compiled.base.phase, ...Object.values(compiled.variants).map((v) => v.phase)].includes("guard");
+  const rawHosts = raw.host !== null && typeof raw.host === "object" ? Object.values(raw.host) : [];
+  const phases = [
+    raw.phase,
+    ...rawHosts.map((h) => (h !== null && typeof h === "object" ? (h as RawManifest).phase : undefined)),
+    compiled.base.phase,
+    ...Object.values(compiled.variants).map((v) => v.phase),
+  ];
+  return phases.includes("guard");
 }
 
 /**

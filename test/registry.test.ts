@@ -135,6 +135,7 @@ test("a guard stays a guard for HOOKMUX_DISABLE when a host table or override ch
   for (const [id, phase, extra] of [
     ["host-route", "guard", '[host.claude-code]\nphase = "route"'],
     ["override-route", "guard", ""],
+    ["codex-guard", "route", '[host.codex]\nphase = "guard"'],
     ["plain-route", "route", ""],
   ] as const) {
     const dir = join(paths.plugins, id);
@@ -154,7 +155,7 @@ test("a guard stays a guard for HOOKMUX_DISABLE when a host table or override ch
       ].join("\n"),
     );
   }
-  writeFileSync(paths.config, '[override.override-route]\nphase = "route"\n');
+  writeFileSync(paths.config, '[override.override-route]\nphase = "route"\n[override.codex-guard]\nphase = "route"\n');
   const pins = Object.fromEntries(
     compileRegistry(paths).plugins.map((p) => [
       p.id,
@@ -166,7 +167,7 @@ test("a guard stays a guard for HOOKMUX_DISABLE when a host table or override ch
   for (const p of registry.plugins) assert.equal(p.status, "active", `${p.id}: ${p.problem}`);
   assert.equal(activeSpecs(registry, "claude-code").find((s) => s.id === "host-route")?.phase, "route");
   const guards = activeSpecs(registry, "claude-code", true).map((s) => s.id);
-  assert.deepEqual(guards.sort(), ["host-route", "override-route"]);
+  assert.deepEqual(guards.sort(), ["codex-guard", "host-route", "override-route"]);
 });
 
 test("a trust entry without a capability list approves no capability", () => {
