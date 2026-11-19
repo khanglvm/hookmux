@@ -73,11 +73,11 @@ type HubScope = Pick<ApprovalTarget, "launcher" | "hooksFile" | "events">;
  * form hookmux has written and whatever their trust state, and the events it lists none for.
  */
 export function hubEntries(hooks: CodexHook[], target: HubScope): HubListing {
-  const sourcePath = codexSourcePath(target.hooksFile);
+  const sourcePaths = codexSourcePaths(target.hooksFile);
   const entries = hooks.filter(
     (h) =>
       hubEventOf(h.command, target.launcher) !== undefined &&
-      h.sourcePath === sourcePath &&
+      sourcePaths.includes(h.sourcePath) &&
       h.source === "user" &&
       !h.isManaged,
   );
@@ -103,15 +103,16 @@ function isCurrentHubEntry(hook: CodexHook, launcher: string): boolean {
 export class CodexUnavailableError extends Error {}
 
 /**
- * Codex reports sourcePath under the realpath of CODEX_HOME (codex-cli 0.170.0),
- * so a symlinked home, or macOS /tmp and /var, must be resolved to match.
+ * The spellings Codex may report for this file (codex-cli 0.170.0): under the realpath of
+ * a CODEX_HOME given in the environment (a symlinked home, macOS /tmp and /var), but under
+ * the unresolved path for the default ~/.codex even when that is a symlink.
  */
-function codexSourcePath(hooksFile: string): string {
+function codexSourcePaths(hooksFile: string): string[] {
   try {
-    return join(realpathSync(dirname(hooksFile)), basename(hooksFile));
+    return [hooksFile, join(realpathSync(dirname(hooksFile)), basename(hooksFile))];
   } catch {
     // No such folder: Codex lists nothing from it either, and the event shows up as missing.
-    return hooksFile;
+    return [hooksFile];
   }
 }
 
