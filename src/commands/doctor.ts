@@ -7,6 +7,7 @@ import "../checks/index.ts";
 import { existsSync } from "node:fs";
 import { engineStatus, installEngine } from "../install/engine.ts";
 import { rerecordNode, writeLauncher } from "../install/launcher.ts";
+import { stableNodePath } from "../install/node-path.ts";
 import { packageLayout } from "../install/package.ts";
 import { compileRegistry } from "../load/registry.ts";
 import { type HomePaths, homePaths } from "../runtime/paths.ts";
@@ -105,7 +106,7 @@ function applyFixes(paths: HomePaths): FixResult[] {
   attempt("re-recorded the launcher's Node path", () => {
     if (existsSync(paths.launcher)) rerecordNode(paths);
     else writeLauncher(paths, packageLayout().launcherTemplate);
-    return process.execPath;
+    return stableNodePath();
   });
   attempt("re-synced hub entries", () => {
     const { results: hosts } = syncHosts(paths);

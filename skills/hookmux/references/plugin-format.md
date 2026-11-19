@@ -241,6 +241,8 @@ Effect text can use these placeholders:
 
 `{evidence.<check>}` is empty for model-backed checks, so model output never becomes text in the agent's context. It is also empty for a check that matched nothing or does not exist. Any other placeholder with an unknown key stays as written.
 
+Script checks can set their own limit with `evidence_chars`. Promote lists each requested variable as `env:NAME` and each limit above 80 as `evidence_chars:N`. An override that requests a new variable or a new limit above 80 requires another promotion, including overrides for a single host.
+
 ## Tests
 
 `tests.toml` lists prompts and the outcome each should have:

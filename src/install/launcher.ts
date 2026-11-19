@@ -5,6 +5,7 @@
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { writeFileAtomic } from "../runtime/fsutil.ts";
 import type { HomePaths } from "../runtime/paths.ts";
+import { stableNodePath } from "./node-path.ts";
 
 const LAUNCHER_MODE = 0o755;
 const NODE_LINE = /^NODE='([^']*)'$/m;
@@ -33,13 +34,13 @@ export function renderLauncher(template: string, nodePath: string, root: string)
   return template.replaceAll("@NODE@", nodePath).replaceAll("@ROOT@", root);
 }
 
-export function writeLauncher(paths: HomePaths, templateFile: string, nodePath: string = process.execPath): void {
+export function writeLauncher(paths: HomePaths, templateFile: string, nodePath: string = stableNodePath()): void {
   const text = renderLauncher(readFileSync(templateFile, "utf8"), nodePath, paths.root);
   writeFileAtomic(paths.launcher, text, LAUNCHER_MODE);
 }
 
 /** Rewrites only the recorded Node path of an existing launcher (doctor --fix). */
-export function rerecordNode(paths: HomePaths, nodePath: string = process.execPath): void {
+export function rerecordNode(paths: HomePaths, nodePath: string = stableNodePath()): void {
   const text = readFileSync(paths.launcher, "utf8");
   if (!NODE_LINE.test(text)) throw new Error(`${paths.launcher} has no NODE= line; run 'hookmux init' to rewrite it`);
   if (nodePath.includes("'")) throw new Error(`Node path '${nodePath}' contains a single quote`);

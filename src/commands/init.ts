@@ -6,6 +6,7 @@ import type { HostAdapter } from "../hosts/types.ts";
 import { type BundledResult, installBundled } from "../install/bundled.ts";
 import { installEngine } from "../install/engine.ts";
 import { writeLauncher } from "../install/launcher.ts";
+import { stableNodePath } from "../install/node-path.ts";
 import { packageLayout } from "../install/package.ts";
 import { readInstallState, writeInstallState } from "../install/records.ts";
 import { installSkill } from "../install/skill.ts";
@@ -60,7 +61,7 @@ export async function run(argv: string[]): Promise<number> {
   say("ok", `engine ${engine.version} ${engine.copied ? "installed" : "already current"} (${engine.dir})`);
   if (engine.pruned.length > 0) say("info", `removed old engines: ${engine.pruned.join(", ")}`);
   writeLauncher(paths, layout.launcherTemplate);
-  say("ok", `launcher ${paths.launcher} (node ${process.execPath})`);
+  say("ok", `launcher ${paths.launcher} (node ${stableNodePath()})`);
   writeInstallState(paths.installState, { timeoutSec });
 
   if (!v["no-bundled"] && (await offer("Install the plugins bundled with hookmux?"))) {

@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { before, test } from "node:test";
+import { stableNodePath } from "../../src/install/node-path.ts";
 import { cli, MOODBOARD, ROOT, runNode, type Sandbox, sandbox, trustInstalled } from "./helpers.ts";
 
 const DIST_CLI = join(ROOT, "dist", "cli.mjs");
@@ -29,7 +30,7 @@ test("init wires Claude Code in an empty home, and a second run changes nothing"
   assert.match(first.stdout, /✓ Claude Code: added prompt\.submit, session\.start/);
   assert.equal(readlinkSync(join(sb.home, "engine", "current")), "0.1.0");
   const launcher = readFileSync(join(sb.home, "bin", "hookmux-hook"), "utf8");
-  assert.ok(launcher.includes(`NODE='${process.execPath}'`));
+  assert.ok(launcher.includes(`NODE='${stableNodePath()}'`));
   assert.ok(!launcher.includes("@ROOT@"));
   const before = readFileSync(join(sb.claude, "settings.json"), "utf8");
 
