@@ -27,13 +27,16 @@ export function allAdapters(): HostAdapter[] {
 }
 
 /**
- * Base events plus every event an active plugin listens to (any host variant).
- * Untrusted plugins do not count: their events are added when they are promoted.
+ * Base events plus every event a valid plugin listens to (any host variant).
+ * Plugins still waiting for promote count too: promote runs in the user's own
+ * terminal and does not touch host configs, and Codex needs a /hooks approval
+ * for every new entry, so the entries go in once, before promote. An entry for
+ * an untrusted plugin runs the engine and adds nothing.
  */
 export function neededEvents(registry: Registry): CanonicalEvent[] {
   const wanted = new Set<CanonicalEvent>(BASE_EVENTS);
   for (const p of registry.plugins) {
-    if (p.status !== "active" || !p.base) continue;
+    if (p.status === "invalid" || !p.base) continue;
     for (const spec of [p.base, ...Object.values(p.variants ?? {})]) for (const e of spec.events) wanted.add(e);
   }
   return CANONICAL_EVENTS.filter((e) => wanted.has(e));
