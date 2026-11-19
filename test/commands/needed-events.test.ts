@@ -3,7 +3,11 @@ import { test } from "node:test";
 import { neededEvents } from "../../src/commands/lib/hosts.ts";
 import type { Registry } from "../../src/load/snapshot.ts";
 
-const plugin = (status: string, events: string[]) => ({ id: status, status, base: { events } });
+const plugin = (status: string, events: string[]) => ({
+  id: status,
+  status,
+  capabilities: events.map((e) => `event:${e}`),
+});
 
 test("hub events cover plugins waiting for promote but not invalid ones", () => {
   const registry = {

@@ -22,6 +22,8 @@ export interface HostResult {
   error?: string;
 }
 
+const EVENT_CAPABILITY = "event:";
+
 export function allAdapters(): HostAdapter[] {
   return Object.values(ADAPTERS);
 }
@@ -34,10 +36,11 @@ export function allAdapters(): HostAdapter[] {
  * an untrusted plugin runs the engine and adds nothing.
  */
 export function neededEvents(registry: Registry): CanonicalEvent[] {
-  const wanted = new Set<CanonicalEvent>(BASE_EVENTS);
+  const wanted = new Set<string>(BASE_EVENTS);
   for (const p of registry.plugins) {
-    if (p.status === "invalid" || !p.base) continue;
-    for (const spec of [p.base, ...Object.values(p.variants ?? {})]) for (const e of spec.events) wanted.add(e);
+    if (p.status === "invalid") continue;
+    // An untrusted entry keeps no spec, only the capabilities promote would approve.
+    for (const c of p.capabilities) if (c.startsWith(EVENT_CAPABILITY)) wanted.add(c.slice(EVENT_CAPABILITY.length));
   }
   return CANONICAL_EVENTS.filter((e) => wanted.has(e));
 }
