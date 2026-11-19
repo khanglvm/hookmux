@@ -86,6 +86,7 @@ function compileOne({ id, dir, config, flags, pinned, sources }: CompileInput): 
       knownHosts: KNOWN_HOSTS,
     });
     entry.warnings = compiled.warnings;
+    entry.phase = compiled.base.phase;
     entry.hash = hashFiles(read.files);
     entry.fileHashes = fileHashesOf(read.files);
     // Capabilities of what would actually run: the manifest with config.toml overrides

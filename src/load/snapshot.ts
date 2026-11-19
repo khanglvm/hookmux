@@ -4,13 +4,13 @@
 
 import { statSync } from "node:fs";
 import type { ProviderSettings } from "../checks/registry.ts";
-import type { PluginSpec } from "../core/types.ts";
+import type { Phase, PluginSpec } from "../core/types.ts";
 import { readJson, writeFileAtomic } from "../runtime/fsutil.ts";
 import type { HomePaths } from "../runtime/paths.ts";
 import { VERSION } from "../version.ts";
 import type { HubSettings } from "./config.ts";
 
-export const REGISTRY_FORMAT = 2;
+export const REGISTRY_FORMAT = 3;
 export const KNOWN_HOSTS = ["claude-code", "codex", "gemini-cli"];
 
 export interface SourceStamp {
@@ -35,6 +35,8 @@ export interface RegistryPlugin {
   fileHashes?: Record<string, string>;
   base?: PluginSpec;
   variants?: Record<string, PluginSpec>;
+  /** The manifest's phase, kept for untrusted plugins too so an unpromoted guard can be reported. */
+  phase?: Phase;
 }
 
 export interface Registry {

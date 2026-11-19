@@ -8,6 +8,7 @@ import { writeSync } from "node:fs";
 import { flushCompileCache } from "node:module";
 import "./checks/index.ts";
 import { runEngine, selectPlugins } from "./core/engine.ts";
+import { offPluginsNotice } from "./core/off-plugins.ts";
 import { CANONICAL_EVENTS, type CanonicalEvent, type HookEvent, type HubResult } from "./core/types.ts";
 import { getAdapter } from "./hosts/index.ts";
 import { activeSpecs, loadRegistry } from "./load/snapshot.ts";
@@ -76,7 +77,9 @@ async function run(): Promise<void> {
       return;
     }
     hookEvent = adapter.parse(event, payload, process.env) ?? undefined;
-    if (!hookEvent || selectPlugins(hookEvent, specs).length === 0) return;
+    if (!hookEvent) return;
+    const offNotice = event === "session.start" ? offPluginsNotice(registry) : null;
+    if (selectPlugins(hookEvent, specs).length === 0 && offNotice === null) return;
 
     clearTimeout(watchdog);
     const deadline = registry.settings.deadlineMs;
@@ -92,6 +95,9 @@ async function run(): Promise<void> {
       },
       firedThisSession: readFired(paths.sessions, hookEvent.sessionId),
     });
+    if (offNotice !== null && hookEvent.host.supports.includes("notify")) {
+      result.notices.push({ pluginId: "hookmux", text: offNotice });
+    }
     output = adapter.render(result, hookEvent);
   } catch (error) {
     errors.push((error as Error)?.message ?? String(error));
