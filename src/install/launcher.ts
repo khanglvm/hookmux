@@ -31,7 +31,8 @@ export function renderLauncher(template: string, nodePath: string, root: string)
   ] as const) {
     if (value.includes("'")) throw new Error(`${label} '${value}' contains a single quote; move it to a plain path`);
   }
-  return template.replaceAll("@NODE@", nodePath).replaceAll("@ROOT@", root);
+  // Function replacers: a string replacement would expand `$&` or `$\`` inside a path.
+  return template.replaceAll("@NODE@", () => nodePath).replaceAll("@ROOT@", () => root);
 }
 
 export function writeLauncher(paths: HomePaths, templateFile: string, nodePath: string = stableNodePath()): void {
@@ -44,7 +45,11 @@ export function rerecordNode(paths: HomePaths, nodePath: string = stableNodePath
   const text = readFileSync(paths.launcher, "utf8");
   if (!NODE_LINE.test(text)) throw new Error(`${paths.launcher} has no NODE= line; run 'hookmux init' to rewrite it`);
   if (nodePath.includes("'")) throw new Error(`Node path '${nodePath}' contains a single quote`);
-  writeFileAtomic(paths.launcher, text.replace(NODE_LINE, `NODE='${nodePath}'`), LAUNCHER_MODE);
+  writeFileAtomic(
+    paths.launcher,
+    text.replace(NODE_LINE, () => `NODE='${nodePath}'`),
+    LAUNCHER_MODE,
+  );
 }
 
 export function readLauncherInfo(paths: HomePaths): LauncherInfo {
