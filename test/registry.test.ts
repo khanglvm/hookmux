@@ -35,8 +35,7 @@ test("an unpromoted plugin flagged shadow runs in shadow only", () => {
   assert.equal(entry?.base?.shadow, true);
 });
 
-test("an unpromoted plugin with a script stays off even when flagged shadow", () => {
-  const paths = home();
+function writeScriptPlugin(paths: ReturnType<typeof home>) {
   const dir = join(paths.plugins, "scripted");
   mkdirSync(dir);
   writeFileSync(join(dir, "check.sh"), "#!/bin/sh\necho '{\"value\":0.9}'\n");
@@ -57,9 +56,37 @@ test("an unpromoted plugin with a script stays off even when flagged shadow", ()
       'text = "hi"',
     ].join("\n"),
   );
+}
+
+test("an unpromoted plugin with a script stays off even when flagged shadow", () => {
+  const paths = home();
+  writeScriptPlugin(paths);
   writeFlags(paths.flags, { shadow: ["scripted"], disabled: [] });
   const entry = compileRegistry(paths).plugins[0];
   assert.equal(entry?.status, "untrusted", entry?.problem);
+});
+
+test("script capabilities added by base and host overrides require another promotion", () => {
+  const paths = home();
+  writeScriptPlugin(paths);
+  const before = compileRegistry(paths).plugins[0];
+  assert.ok(before?.hash);
+  writeTrust(paths.trust, {
+    plugins: { scripted: { hash: before.hash, capabilities: before.capabilities, promotedAt: "test" } },
+  });
+  assert.equal(compileRegistry(paths).plugins[0]?.status, "active");
+  for (const table of ["override.scripted", "override.scripted.host.codex"]) {
+    for (const [option, capability] of [
+      ['env = ["SYNTHETIC_TOKEN"]', "env:SYNTHETIC_TOKEN"],
+      ["evidence_chars = 600", "evidence_chars:600"],
+    ] as const) {
+      writeFileSync(paths.config, `[${table}.checks.score]\n${option}\n`);
+      const entry = compileRegistry(paths).plugins[0];
+      assert.equal(entry?.status, "untrusted");
+      assert.equal(entry.problem, `config override adds ${capability}; run hookmux promote scripted`);
+      assert.ok(entry.capabilities.includes(capability));
+    }
+  }
 });
 
 test("a score script can be compared in when, and a bool check cannot", () => {

@@ -236,9 +236,11 @@ Effect text can use these placeholders:
 | `{host.id}`, `{host.name}`    | The calling client, such as `claude-code` and `Claude Code` |
 | `{host.version}`              | The client version, or `unknown`                            |
 | `{event.name}`, `{event.cwd}` | The canonical event and the working folder                  |
-| `{evidence.<check>}`          | The text a check matched, cut to 80 characters (a script check sets its own limit with `evidence_chars`) |
+| `{evidence.<check>}`          | The text a check matched, cut to 80 characters              |
 
 `{evidence.<check>}` is empty for model-backed checks, so model output never becomes text in the agent's context. It is also empty for a check that matched nothing or does not exist. Any other placeholder with an unknown key stays as written.
+
+Script checks can set their own limit with `evidence_chars`. Promote lists each requested variable as `env:NAME` and each limit above 80 as `evidence_chars:N`. An override that requests a new variable or a new limit above 80 requires another promotion, including overrides for a single host.
 
 ## Tests
 

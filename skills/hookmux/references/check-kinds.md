@@ -111,7 +111,7 @@ Runs an executable from the plugin folder; it reads the event as JSON on stdin a
 | `needs_raw`      | default false; true also sends the host's original payload                                                                                    |
 | `output`         | "bool" (default) or "score"                                                                                                                   |
 | `env`            | extra environment variable names passed through when set (at most 32, no HOOKMUX_*); each is a capability that promote approves               |
-| `evidence_chars` | characters of the script's evidence kept for templates; default 80, at most 4000                                                              |
+| `evidence_chars` | characters of evidence kept for templates; default 80, at most 4000. Limits above 80 need approval                                            |
 
 ## `tool`
 

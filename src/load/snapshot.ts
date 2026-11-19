@@ -10,7 +10,7 @@ import type { HomePaths } from "../runtime/paths.ts";
 import { VERSION } from "../version.ts";
 import type { HubSettings } from "./config.ts";
 
-export const REGISTRY_FORMAT = 1;
+export const REGISTRY_FORMAT = 2;
 export const KNOWN_HOSTS = ["claude-code", "codex", "gemini-cli"];
 
 export interface SourceStamp {
