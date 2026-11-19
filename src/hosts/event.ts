@@ -40,7 +40,7 @@ export function parseHostPayload(
       limits: { contextChars: host.contextChars },
     },
     sessionId: str(p.session_id) ?? "",
-    cwd: str(p.cwd) ?? process.cwd(),
+    cwd: str(p.cwd) || process.cwd(),
     origin: event === "prompt.submit" ? reading.promptOrigin(p, prompt) : "unknown",
     raw: payload,
   };

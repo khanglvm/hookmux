@@ -133,7 +133,7 @@ The command set is still growing. `hookmux help` lists the commands in your inst
   hookmux log off
   ```
 
-- To switch hookmux off for one session without uninstalling it, start the client with `HOOKMUX_DISABLE=1` in its environment.
+- To switch hookmux off for one session without uninstalling it, start the client with `HOOKMUX_DISABLE=1` in its environment. Guard plugins keep running, because a session can set that variable itself; turn one off with `hookmux disable <id>`, which the next session start reports.
 
 ## Uninstall
 

@@ -23,3 +23,13 @@ test("an unpromoted guard and a plugin that does not load are named at session s
 test("no notice when every guard runs and every plugin loads", () => {
   assert.equal(offPluginsNotice(registry([{ id: "nudge", status: "untrusted", phase: "enrich" }])), null);
 });
+
+test("a guard switched off with disable or shadow is named too", () => {
+  const notice = offPluginsNotice(
+    registry([
+      { id: "off-guard", status: "active", phase: "guard", base: { enabled: false } },
+      { id: "shadow-guard", status: "active", phase: "guard", base: { enabled: true, shadow: true } },
+    ]),
+  );
+  assert.equal(notice, "hookmux: guard plugin off-guard, shadow-guard is disabled or in shadow and blocks nothing.");
+});
