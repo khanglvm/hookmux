@@ -9,13 +9,7 @@ import { flushCompileCache } from "node:module";
 import "./checks/index.ts";
 import { runEngine, selectPlugins } from "./core/engine.ts";
 import { offPluginsNotice } from "./core/off-plugins.ts";
-import {
-  CANONICAL_EVENTS,
-  type CanonicalEvent,
-  type HookEvent,
-  type HubResult,
-  type PluginSpec,
-} from "./core/types.ts";
+import { CANONICAL_EVENTS, type CanonicalEvent, type HookEvent, type HubResult } from "./core/types.ts";
 import { getAdapter } from "./hosts/index.ts";
 import { activeSpecs, loadRegistry } from "./load/snapshot.ts";
 import { recordFailures } from "./runtime/health.ts";
@@ -72,7 +66,9 @@ async function run(): Promise<void> {
     const event = args.event as CanonicalEvent;
     const input = await readStdin(MAX_STDIN_BYTES, DEFAULT_DEADLINE_MS);
     const registry = await loadRegistry(paths);
-    const specs = withoutSwitchedOff(activeSpecs(registry, adapter.id));
+    // Security: a session can set its hooks' environment through project settings, so HOOKMUX_DISABLE=1
+    // switches off every plugin except guards; it must not be a way for an agent to lift a guard.
+    const specs = activeSpecs(registry, adapter.id, process.env.HOOKMUX_DISABLE === "1");
     let payload: unknown;
     try {
       payload = JSON.parse(input);
@@ -110,14 +106,6 @@ async function run(): Promise<void> {
     emit(output);
     afterOutput(paths, args, performance.now() - started, hookEvent, result, output, errors);
   }
-}
-
-/**
- * HOOKMUX_DISABLE=1 switches off every plugin except guards. Security: a session can set its hooks' environment
- * through project settings, so the switch must not be a way for an agent to lift a guard.
- */
-function withoutSwitchedOff(specs: PluginSpec[]): PluginSpec[] {
-  return process.env.HOOKMUX_DISABLE === "1" ? specs.filter((s) => s.phase === "guard") : specs;
 }
 
 /** Best-effort bookkeeping once the client already has its answer. */

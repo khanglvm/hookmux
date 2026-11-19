@@ -33,3 +33,18 @@ test("a guard switched off with disable or shadow is named too", () => {
   );
   assert.equal(notice, "hookmux: guard plugin off-guard, shadow-guard is disabled or in shadow and blocks nothing.");
 });
+
+test("a guard switched off for one host only is named too", () => {
+  const notice = offPluginsNotice(
+    registry([
+      {
+        id: "host-off",
+        status: "active",
+        phase: "guard",
+        base: { enabled: true, shadow: false },
+        variants: { codex: { enabled: false, shadow: false } },
+      },
+    ]),
+  );
+  assert.equal(notice, "hookmux: guard plugin host-off is disabled or in shadow and blocks nothing.");
+});

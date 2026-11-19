@@ -28,7 +28,10 @@ export function offPluginsNotice(registry: Registry): string | null {
   const invalid = registry.plugins.filter((p) => p.status === "invalid");
   // `hookmux disable` and `add --shadow` work without promote, so an agent can switch a guard off with them.
   const switchedOff = registry.plugins.filter(
-    (p) => p.status === "active" && p.phase === "guard" && (p.base?.enabled === false || p.base?.shadow === true),
+    (p) =>
+      p.status === "active" &&
+      p.phase === "guard" &&
+      [p.base, ...Object.values(p.variants ?? {})].some((s) => s?.enabled === false || s?.shadow === true),
   );
   const parts: string[] = [];
   if (unpromotedGuards.length > 0) {

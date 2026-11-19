@@ -9,7 +9,15 @@ import type { HomePaths } from "../runtime/paths.ts";
 import { VERSION } from "../version.ts";
 import { readConfig } from "./config.ts";
 import { applyFlags, type FlagsRead, readFlags } from "./flags.ts";
-import { compileManifest, MANIFEST_FILE, ManifestError, PLUGIN_ID, readManifestText } from "./manifest.ts";
+import {
+  type CompiledPlugin,
+  compileManifest,
+  MANIFEST_FILE,
+  ManifestError,
+  PLUGIN_ID,
+  type RawManifest,
+  readManifestText,
+} from "./manifest.ts";
 import {
   KNOWN_HOSTS,
   REGISTRY_FORMAT,
@@ -86,7 +94,7 @@ function compileOne({ id, dir, config, flags, pinned, sources }: CompileInput): 
       knownHosts: KNOWN_HOSTS,
     });
     entry.warnings = compiled.warnings;
-    entry.phase = compiled.base.phase;
+    entry.phase = guardOnAnyLayer(raw, compiled) ? "guard" : compiled.base.phase;
     entry.hash = hashFiles(read.files);
     entry.fileHashes = fileHashesOf(read.files);
     // Capabilities of what would actually run: the manifest with config.toml overrides
@@ -123,6 +131,14 @@ function compileOne({ id, dir, config, flags, pinned, sources }: CompileInput): 
     if (!flags.problem && !existsSync(join(dir, MANIFEST_FILE))) entry.problem = `no ${MANIFEST_FILE}`;
   }
   return entry;
+}
+
+/**
+ * Security: a `[host.<id>]` table or a config.toml override can change phase without promote, so a plugin
+ * that is a guard in its manifest or on any host stays a guard for HOOKMUX_DISABLE and the off notice.
+ */
+function guardOnAnyLayer(raw: RawManifest, compiled: CompiledPlugin): boolean {
+  return [raw.phase, compiled.base.phase, ...Object.values(compiled.variants).map((v) => v.phase)].includes("guard");
 }
 
 /**

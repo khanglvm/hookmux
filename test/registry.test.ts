@@ -9,7 +9,7 @@ import { ADAPTERS } from "../src/hosts/index.ts";
 import { writeFlags } from "../src/load/flags.ts";
 import { compileManifest } from "../src/load/manifest.ts";
 import { compileRegistry } from "../src/load/registry.ts";
-import { KNOWN_HOSTS } from "../src/load/snapshot.ts";
+import { activeSpecs, KNOWN_HOSTS } from "../src/load/snapshot.ts";
 import { capabilitiesOf, writeTrust } from "../src/load/trust.ts";
 import { homePaths } from "../src/runtime/paths.ts";
 
@@ -128,6 +128,45 @@ test("a config override that adds capabilities sends a promoted plugin back to p
   assert.equal(after?.status, "untrusted");
   assert.equal(after?.problem, "config override adds block; run hookmux promote moodboard");
   assert.ok(after?.capabilities.includes("block"), "capabilities come from the effective spec");
+});
+
+test("a guard stays a guard for HOOKMUX_DISABLE when a host table or override changes its phase", () => {
+  const paths = home();
+  for (const [id, phase, extra] of [
+    ["host-route", "guard", '[host.claude-code]\nphase = "route"'],
+    ["override-route", "guard", ""],
+    ["plain-route", "route", ""],
+  ] as const) {
+    const dir = join(paths.plugins, id);
+    mkdirSync(dir);
+    writeFileSync(
+      join(dir, "plugin.toml"),
+      [
+        "schema = 1",
+        `id = "${id}"`,
+        `phase = "${phase}"`,
+        'events = ["prompt.submit"]',
+        'when = "true"',
+        "[[then]]",
+        'effect = "inject"',
+        'text = "hi"',
+        extra,
+      ].join("\n"),
+    );
+  }
+  writeFileSync(paths.config, '[override.override-route]\nphase = "route"\n');
+  const pins = Object.fromEntries(
+    compileRegistry(paths).plugins.map((p) => [
+      p.id,
+      { hash: p.hash ?? "", capabilities: p.capabilities, promotedAt: "test" },
+    ]),
+  );
+  writeTrust(paths.trust, { plugins: pins });
+  const registry = compileRegistry(paths);
+  for (const p of registry.plugins) assert.equal(p.status, "active", `${p.id}: ${p.problem}`);
+  assert.equal(activeSpecs(registry, "claude-code").find((s) => s.id === "host-route")?.phase, "route");
+  const guards = activeSpecs(registry, "claude-code", true).map((s) => s.id);
+  assert.deepEqual(guards.sort(), ["host-route", "override-route"]);
 });
 
 test("a trust entry without a capability list approves no capability", () => {

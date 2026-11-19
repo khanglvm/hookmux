@@ -35,7 +35,7 @@ export interface RegistryPlugin {
   fileHashes?: Record<string, string>;
   base?: PluginSpec;
   variants?: Record<string, PluginSpec>;
-  /** The manifest's phase, kept for untrusted plugins too so an unpromoted guard can be reported. */
+  /** "guard" when the manifest or any host makes it one, else the base phase; kept for untrusted plugins too. */
   phase?: Phase;
 }
 
@@ -93,11 +93,15 @@ export async function loadRegistry(paths: HomePaths): Promise<Registry> {
   return fresh;
 }
 
-/** Active plugin specs for one host, with that host's variant when it has one. */
-export function activeSpecs(registry: Registry, hostId: string): PluginSpec[] {
+/**
+ * Active plugin specs for one host, with that host's variant when it has one.
+ * `guardsOnly` keeps only plugins whose registry phase is guard, even where a host variant runs one as another phase.
+ */
+export function activeSpecs(registry: Registry, hostId: string, guardsOnly = false): PluginSpec[] {
   const out: PluginSpec[] = [];
   for (const p of registry.plugins) {
     if (p.status !== "active" || !p.base) continue;
+    if (guardsOnly && p.phase !== "guard") continue;
     const spec = p.variants?.[hostId] ?? p.base;
     out.push(p.fileHashes ? { ...spec, fileHashes: p.fileHashes } : spec);
   }
