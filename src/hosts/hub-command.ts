@@ -65,12 +65,21 @@ function readDoubleQuoted(command: string, start: number): { text: string; end: 
   return null;
 }
 
-/** The arguments every hub entry carries right after the launcher. */
-const HUB_ARGS = /^\s+--host\s+\S+\s+--event\s+\S+/;
+/** The arguments every hub entry carries right after the launcher; the group is the event. */
+const HUB_ARGS = /^\s+--host\s+\S+\s+--event\s+(\S+)/;
+
+/**
+ * The event named by a configured command that runs exactly this launcher with
+ * --host and --event, in any form hookmux has written; undefined for any other command.
+ */
+export function hubEventOf(command: unknown, launcher: string): string | undefined {
+  if (typeof command !== "string") return undefined;
+  const parsed = firstShellWord(command.trim());
+  if (parsed === null || parsed.word !== launcher) return undefined;
+  return HUB_ARGS.exec(parsed.rest)?.[1];
+}
 
 /** True when a configured command runs exactly this launcher with --host and --event. */
 export function isHubCommand(command: unknown, launcher: string): boolean {
-  if (typeof command !== "string") return false;
-  const parsed = firstShellWord(command.trim());
-  return parsed !== null && parsed.word === launcher && HUB_ARGS.test(parsed.rest);
+  return hubEventOf(command, launcher) !== undefined;
 }

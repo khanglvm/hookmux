@@ -8,15 +8,17 @@
 // Security: only an entry whose command is exactly a hub command for this
 // launcher, in the hooks.json hookmux manages, from the user layer and not
 // managed by policy, is approved. The key and hash come from Codex itself and
-// are never built here. Every other hook keeps its own approval state.
+// are never built here. Every other hook keeps its own approval state; a hub
+// entry in an older written form is reported, but left for /hooks, because
+// isHubCommand accepts trailing text after --event that the hub never wrote.
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
-import type { CanonicalEvent } from "../core/types.ts";
-import { hubCommand } from "./hub-command.ts";
+import { CANONICAL_EVENTS, type CanonicalEvent } from "../core/types.ts";
+import { hubCommand, hubEventOf } from "./hub-command.ts";
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 /** How long the server gets to exit after SIGTERM before SIGKILL, so hookmux never waits on it. */
@@ -63,20 +65,26 @@ export interface HubListing {
 
 type HubScope = Pick<ApprovalTarget, "launcher" | "hooksFile" | "events">;
 
-/** Hub entries of this launcher that Codex lists, whatever their trust state, and the events it lists none for. */
+/**
+ * Hub entries of this launcher that Codex lists in hookmux's hooks.json, in any
+ * form hookmux has written and whatever their trust state, and the events it lists none for.
+ */
 export function hubEntries(hooks: CodexHook[], target: HubScope): HubListing {
-  const byCommand = new Map(target.events.map((e) => [hubCommand(target.launcher, "codex", e), e]));
   const sourcePath = codexSourcePath(target.hooksFile);
   const entries = hooks.filter(
     (h) =>
-      h.command !== null &&
-      byCommand.has(h.command) &&
+      hubEventOf(h.command, target.launcher) !== undefined &&
       h.sourcePath === sourcePath &&
       h.source === "user" &&
       !h.isManaged,
   );
-  const seen = new Set(entries.map((h) => byCommand.get(h.command as string)));
+  const seen = new Set(entries.map((h) => hubEventOf(h.command, target.launcher)));
   return { entries, missing: target.events.filter((e) => !seen.has(e)) };
+}
+
+/** True when the entry's command is exactly what hookmux writes today, the only form approved here. */
+function isCurrentHubCommand(hook: CodexHook, launcher: string): boolean {
+  return CANONICAL_EVENTS.some((e) => hook.command === hubCommand(launcher, "codex", e));
 }
 
 /**
@@ -100,8 +108,12 @@ function needsApproval(hook: CodexHook): boolean {
 export async function approveHubEntries(target: ApprovalTarget): Promise<ApprovalResult> {
   return withAppServer(target, async (call) => {
     const { entries: listed, missing } = hubEntries(await listHooks(call), target);
-    const pending = listed.filter(needsApproval);
-    if (pending.length === 0) return { approved: [], alreadyTrusted: listed.length, stillUntrusted: [], missing };
+    const untrusted = listed.filter(needsApproval);
+    const pending = untrusted.filter((h) => isCurrentHubCommand(h, target.launcher));
+    if (pending.length === 0) {
+      const stillUntrusted = untrusted.map((h) => h.key);
+      return { approved: [], alreadyTrusted: listed.length - untrusted.length, stillUntrusted, missing };
+    }
     await call("config/batchWrite", {
       edits: pending.map((h) => ({
         keyPath: `hooks.state.${tomlKey(h.key)}.trusted_hash`,
@@ -112,7 +124,7 @@ export async function approveHubEntries(target: ApprovalTarget): Promise<Approva
     const after = hubEntries(await listHooks(call), target).entries;
     return {
       approved: pending.map((h) => h.key).filter((k) => after.some((h) => h.key === k && h.trustStatus === "trusted")),
-      alreadyTrusted: listed.length - pending.length,
+      alreadyTrusted: listed.length - untrusted.length,
       stillUntrusted: after.filter(needsApproval).map((h) => h.key),
       missing,
     };

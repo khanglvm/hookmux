@@ -1,7 +1,8 @@
 // Standing approvals (promote --standing) and Codex hub approval through the fake app-server.
 
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { approveHubEntries } from "../../src/hosts/codex-trust.ts";
@@ -184,4 +185,22 @@ test("an app-server that ignores SIGTERM is killed after the timeout", async () 
   await assert.rejects(approveHubEntries({ ...target, timeoutMs: 300 }), /did not answer in time/);
   const pid = Number(readFileSync(join(home, "fake.pid"), "utf8"));
   assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+});
+
+test("a hub entry in the older double-quoted form is left for /hooks, and counts once approved there", async () => {
+  const sb = sandbox();
+  const home = sb.env.CODEX_HOME as string;
+  mkdirSync(home, { recursive: true });
+  const legacy = { type: "command", command: `"${homePaths(sb.home).launcher}" --host codex --event prompt.submit` };
+  writeFileSync(codexHooks(sb), JSON.stringify({ hooks: { UserPromptSubmit: [{ hooks: [legacy] }] } }));
+  const r = await cli(sb, "init", "--host", "codex", "--no-skill", "--no-bundled");
+  assert.equal(r.code, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /Codex: 1 hub entries still need approval/);
+  const legacyKey = `${realpathSync(home)}/hooks.json:user_prompt_submit:0:0`;
+  assert.equal(fakeTrust(sb)[legacyKey], undefined);
+  const byHand = `sha256:${createHash("sha256").update(JSON.stringify(legacy)).digest("hex")}`;
+  writeFileSync(join(home, "fake-trust.json"), JSON.stringify({ ...fakeTrust(sb), [legacyKey]: byHand }));
+  const again = await cli(sb, "sync");
+  assert.equal(again.code, 0, again.stdout + again.stderr);
+  assert.match((await cli(sb, "doctor")).stdout, /Codex: 2 hub entries approved/);
 });
