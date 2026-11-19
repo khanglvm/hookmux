@@ -68,12 +68,16 @@ Run `hookmux add <dir> --shadow`. A shadow plugin is evaluated and logged, and a
 
 ### 8. Hand over
 
-Tell the user what the plugin does (event, trigger, effect, and whether it can block), the test results, and the command to run in their own terminal:
+Tell the user what the plugin does (event, trigger, effect, and whether it can block) and the test results. Then ask for promotion in one of two ways.
+
+In Claude Code, run this as a Bash call by itself, with nothing else on the line:
 
 ```sh
 hookmux promote <id>
 ```
 
-Promote asks the user to type `y`. It refuses without an interactive terminal, refuses `--yes`, and refuses inside your environment; that refusal is the approval step working. Leave promotion entirely to the user: hand over the command and stop there. Running it through a pseudo-terminal, adding `--yes`, editing `~/.hookmux/trust.json` or the registry, and turning on `auto_trust_declarative` are all ways around the user's approval, so none of them is yours to do.
+The hub makes Claude Code show the user that call and wait. If they approve, the plugin goes live; if they decline, it stays off. Say what you are about to ask before you run it.
+
+In any other client, hand the same command to the user to run in their own terminal, and stop there. Promote then asks them to type `y`. It refuses without an interactive terminal, refuses `--yes`, and refuses inside your environment; that refusal is the approval step working. Running it through a pseudo-terminal, adding `--yes`, writing a `--grant` yourself, feeding the hub a payload of your own, wrapping the command so the hub does not see it, editing `~/.hookmux/trust.json` or the registry, and turning on `auto_trust_declarative` are all ways around the user's approval, so none of them is yours to do.
 
 Any later edit to the plugin folder un-trusts it until the user promotes it again. Say so when you change a live plugin. If the user granted a standing approval (`hookmux promote <id> --standing`), reinstall the changed plugin with `hookmux add <dir> --force` and it goes live while its capabilities stay within that approval; a new capability still needs the user's promote.

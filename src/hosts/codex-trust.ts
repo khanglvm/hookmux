@@ -182,9 +182,10 @@ async function withAppServer<T>(target: ApprovalTarget, body: (call: Call) => Pr
     for (const w of waiting.values()) w.reject(failure);
     waiting.clear();
   };
-  child.on("error", (error) =>
-    failAll(new CodexUnavailableError(`could not start codex app-server: ${error.message}`)),
-  );
+  child.on("error", (error: NodeJS.ErrnoException) => {
+    const message = `could not start codex app-server: ${error.message}`;
+    failAll(error.code === "ENOENT" ? new CodexUnavailableError(message) : new Error(message));
+  });
   child.on("exit", (code) => failAll(new Error(`codex app-server exited (${code ?? "signal"})`)));
   child.stdin.on("error", (error) => failAll(new Error(`codex app-server closed its input: ${error.message}`)));
   createInterface({ input: child.stdout }).on("line", (line) => {

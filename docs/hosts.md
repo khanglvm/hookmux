@@ -17,6 +17,7 @@ Written from the Claude Code hooks reference and covered by the test suite.
 - Background-task notifications arrive as prompts that start with `<task-notification>`. hookmux gives them origin `system`, so route plugins skip them. Claude Code does not document this wrapper; it comes from observed payloads.
 - The payload carries no client version, so a `host` check with a `version` range is unknown on Claude Code.
 - Tool names are Claude Code's own (`Bash`, `Write`, `Edit`, `Read` and so on).
+- When an agent's Bash call is exactly `hookmux promote <id>` or `hookmux promote <id> --standing`, the hub answers with an `ask` permission decision, so Claude Code shows you the call and waits for your approval. The hub adds a one-time `--grant` to the command you approve, and promote accepts that grant in place of a terminal. Seen on Claude Code 2.1.327: the prompt appears under `bypassPermissions` too, and where no prompt can be shown (`claude -p`) the call is refused. A `PermissionRequest` hook that approves everything would answer the prompt for you, so leave this command out of it. The same goes for an Agent SDK app whose `canUseTool` approves every call. Going by Claude Code 2.1.327's own messages, auto mode does not run a call a hook rewrote, so the plugin stays off there; approve it from Manual mode.
 
 ## Codex (`codex`)
 

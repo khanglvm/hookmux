@@ -7,6 +7,7 @@
 import { relative } from "node:path";
 import { readFlagsForUpdate, writeFlags } from "../../load/flags.ts";
 import { isCapabilitySubset, listPluginFiles, readTrust, uncoveredCapabilities, writeTrust } from "../../load/trust.ts";
+import { takeGrant } from "../../runtime/grants.ts";
 import type { HomePaths } from "../../runtime/paths.ts";
 import { type ActivationRefusal, activationRefusal, agentMarker } from "./agent-env.ts";
 import { syncAfterChange } from "./hosts.ts";
@@ -58,13 +59,53 @@ export async function promotePlugin(paths: HomePaths, id: string, opts: PromoteO
     say("info", `${id} left as it was`);
     return 1;
   }
+  pin(paths, id, { hash, capabilities }, standing);
+  say("ok", `${id} promoted; it runs on the next hook event`);
+  await syncAfterChange(paths);
+  return 0;
+}
+
+/** Records the person's approval: the content pin, the standing approval when asked for, and no shadow flag. */
+function pin(paths: HomePaths, id: string, content: { hash: string; capabilities: string[] }, standing: boolean): void {
   const now = new Date().toISOString();
   const trust = readTrust(paths.trust);
-  const kept = standing ? { capabilities, grantedAt: now } : previous?.standing;
-  trust.plugins[id] = { hash, capabilities, promotedAt: now, via: "promote", ...(kept ? { standing: kept } : {}) };
+  const kept = standing ? { capabilities: content.capabilities, grantedAt: now } : trust.plugins[id]?.standing;
+  trust.plugins[id] = { ...content, promotedAt: now, via: "promote", ...(kept ? { standing: kept } : {}) };
   writeTrust(paths.trust, trust);
+  const flags = readFlagsForUpdate(paths.flags);
   writeFlags(paths.flags, { ...flags, shadow: flags.shadow.filter((s) => s !== id) });
-  say("ok", `${id} promoted; it runs on the next hook event`);
+}
+
+/**
+ * Activates a plugin on a grant the hub issued when the person approved this exact
+ * command in their agent client. The grant stands in for the terminal check, so it
+ * must match the plugin, the content the person was shown and the --standing flag.
+ * Exit code: 0 promoted, 1 refused.
+ */
+export async function promoteWithGrant(
+  paths: HomePaths,
+  id: string,
+  opts: { token: string; standing: boolean },
+): Promise<number> {
+  const again = `hookmux promote ${id}${opts.standing ? " --standing" : ""}`;
+  const grant = takeGrant(paths.grants, opts.token);
+  if (!grant || grant.id !== id || grant.standing !== opts.standing) {
+    say("fail", `this approval for '${id}' is unknown, already used or expired`, `ask again: ${again}`);
+    return 1;
+  }
+  const row = inspectInstalled(paths).rows.find((r) => r.id === id);
+  if (!row || row.status === "invalid" || row.entry.hash === undefined) {
+    say("fail", `${id} is invalid: ${row?.entry.problem ?? "not installed"}`, "hookmux list");
+    return 1;
+  }
+  const sameCapabilities =
+    Array.isArray(grant.capabilities) && grant.capabilities.join("\n") === row.entry.capabilities.join("\n");
+  if (row.entry.hash !== grant.hash || !sameCapabilities) {
+    say("fail", `${id} changed after the approval was shown, so it was not activated`, `ask again: ${again}`);
+    return 1;
+  }
+  pin(paths, id, { hash: row.entry.hash, capabilities: row.entry.capabilities }, opts.standing);
+  say("ok", `${id} promoted on your approval; it runs on the next hook event`);
   await syncAfterChange(paths);
   return 0;
 }

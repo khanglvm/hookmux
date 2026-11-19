@@ -19,6 +19,8 @@ export interface HomePaths {
   logFile: string;
   logSettings: string;
   health: string;
+  /** One-time grants for promote commands a person approves in their agent client. */
+  grants: string;
   /** Hub-owned shadow and disabled lists, applied after user overrides. */
   flags: string;
   /** Where each installed plugin came from (`hookmux add`). */
@@ -45,6 +47,7 @@ export function homePaths(root = process.env.HOOKMUX_HOME || join(homedir(), ".h
     logFile: join(root, "logs", "hookmux.log"),
     logSettings: join(root, "logs", "settings.json"),
     health: join(root, "state", "health.json"),
+    grants: join(root, "state", "grants"),
     flags: join(root, "flags.json"),
     sources: join(root, "sources.json"),
     installState: join(root, "install.json"),

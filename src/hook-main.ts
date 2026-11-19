@@ -9,9 +9,12 @@ import { flushCompileCache } from "node:module";
 import "./checks/index.ts";
 import { runEngine, selectPlugins } from "./core/engine.ts";
 import { offPluginsNotice } from "./core/off-plugins.ts";
+import { grantedCommand, type PromoteRequest, parsePromoteCommand } from "./core/promote-command.ts";
 import { CANONICAL_EVENTS, type CanonicalEvent, type HookEvent, type HubResult } from "./core/types.ts";
 import { getAdapter } from "./hosts/index.ts";
-import { activeSpecs, loadRegistry } from "./load/snapshot.ts";
+import type { HostAdapter } from "./hosts/types.ts";
+import { activeSpecs, loadRegistry, type Registry, type RegistryPlugin } from "./load/snapshot.ts";
+import { newGrantToken, saveGrant } from "./runtime/grants.ts";
 import { recordFailures } from "./runtime/health.ts";
 import { appendLog, buildLogLine, loggingActive, readLogSettings } from "./runtime/log.ts";
 import { homePaths } from "./runtime/paths.ts";
@@ -50,6 +53,58 @@ function parseArgs(argv: string[]): { host: string; event: string } {
   return { host: value("--host"), event: value("--event") };
 }
 
+/** A promote command the hub answers by asking the person, and the grant that approval will carry. */
+interface PromoteConfirmation {
+  request: PromoteRequest;
+  hash: string;
+  capabilities: string[];
+  token: string;
+  output: string;
+}
+
+/**
+ * When the tool call is exactly `hookmux promote <id> [--standing]` for an installed
+ * plugin, on a client that can ask the person: the output that asks, with the grant
+ * added to the command. Null for everything else, which then runs untouched.
+ */
+function promoteConfirmation(adapter: HostAdapter, registry: Registry, event: HookEvent): PromoteConfirmation | null {
+  if (event.name !== "tool.before" || !adapter.confirm || event.tool?.canonicalName !== "Bash") return null;
+  const input = event.tool.input;
+  if (typeof input !== "object" || input === null) return null;
+  const request = parsePromoteCommand((input as Record<string, unknown>).command);
+  if (!request) return null;
+  const plugin = registry.plugins.find((p) => p.id === request.id);
+  if (!plugin || plugin.status === "invalid" || plugin.hash === undefined) return null;
+  const token = newGrantToken();
+  const reason = [
+    `hookmux: approve to activate plugin ${request.id} (${currentState(plugin)}).`,
+    `It can use: ${plugin.capabilities.join(", ") || "nothing beyond its events"}.`,
+    request.standing
+      ? "Standing approval: later versions installed with hookmux add go live without asking while they need no more than this."
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const output = adapter.confirm(event, {
+    reason,
+    // Security: the description sits beside the command on the person's card, so the agent's wording is not kept.
+    input: {
+      ...(input as Record<string, unknown>),
+      command: grantedCommand(request, token),
+      description: `hookmux: activate plugin ${request.id}`,
+    },
+  });
+  return { request, hash: plugin.hash, capabilities: plugin.capabilities, token, output };
+}
+
+/** What the plugin is before approval; approving pins it and clears its shadow flag. */
+function currentState(plugin: RegistryPlugin): string {
+  if (plugin.status !== "active" || !plugin.trusted) return plugin.problem ?? "not promoted yet";
+  if (plugin.base && !plugin.base.enabled) return "turned off; approving does not turn it on";
+  if (plugin.base?.shadow) return "in shadow mode; approving makes it live";
+  return "active now";
+}
+
 async function run(): Promise<void> {
   const started = performance.now();
   const args = parseArgs(process.argv.slice(2));
@@ -59,6 +114,7 @@ async function run(): Promise<void> {
   let hookEvent: HookEvent | undefined;
   let result: HubResult | undefined;
   let output = "";
+  let granted: PromoteConfirmation | undefined;
 
   try {
     const adapter = getAdapter(args.host);
@@ -79,7 +135,14 @@ async function run(): Promise<void> {
     hookEvent = adapter.parse(event, payload, process.env) ?? undefined;
     if (!hookEvent) return;
     const offNotice = event === "session.start" ? offPluginsNotice(registry) : null;
-    if (selectPlugins(hookEvent, specs).length === 0 && offNotice === null) return;
+    const confirmation = promoteConfirmation(adapter, registry, hookEvent);
+    if (selectPlugins(hookEvent, specs).length === 0 && offNotice === null) {
+      if (confirmation) {
+        granted = confirmation;
+        output = confirmation.output;
+      }
+      return;
+    }
 
     clearTimeout(watchdog);
     const deadline = registry.settings.deadlineMs;
@@ -98,13 +161,32 @@ async function run(): Promise<void> {
     if (offNotice !== null && hookEvent.host.supports.includes("notify")) {
       result.notices.push({ pluginId: "hookmux", text: offNotice });
     }
-    output = adapter.render(result, hookEvent);
+    // A guard plugin's block on the command wins over the question.
+    if (confirmation && !result.block) {
+      granted = confirmation;
+      output = confirmation.output;
+    } else output = adapter.render(result, hookEvent);
   } catch (error) {
     errors.push((error as Error)?.message ?? String(error));
     output = "";
   } finally {
     emit(output);
+    if (granted && output === granted.output) storeGrant(paths.grants, granted);
     afterOutput(paths, args, performance.now() - started, hookEvent, result, output, errors);
+  }
+}
+
+/** The person answers the card long after this process exits, so the grant is on disk before then. */
+function storeGrant(dir: string, granted: PromoteConfirmation): void {
+  try {
+    saveGrant(dir, granted.token, {
+      id: granted.request.id,
+      hash: granted.hash,
+      capabilities: granted.capabilities,
+      standing: granted.request.standing,
+    });
+  } catch {
+    // Without the grant the approved command is refused and says how to ask again.
   }
 }
 

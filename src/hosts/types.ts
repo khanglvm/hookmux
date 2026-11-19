@@ -20,6 +20,11 @@ export interface HostAdapter {
   parse(event: CanonicalEvent, payload: unknown, env: NodeJS.ProcessEnv): HookEvent | null;
   /** The exact stdout for this result. An empty string is always a valid no-op. */
   render(result: HubResult, event: HookEvent): string;
+  /**
+   * The stdout that makes the client ask the person before this tool call runs, with the
+   * tool input replaced by `input`. Absent when the client has no such prompt.
+   */
+  confirm?(event: HookEvent, ask: { reason: string; input: Record<string, unknown> }): string;
   /** A minimal valid stdin payload for this event, used by `doctor` and tests. */
   sample(event: CanonicalEvent, prompt?: string): Record<string, unknown>;
   config: HostConfigEditor;

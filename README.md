@@ -90,24 +90,25 @@ Notes on each client, including the Codex and Gemini CLI adapters, are in [docs/
 
 ## Commands
 
-| Command                                       | What it does                                                                 |
-| --------------------------------------------- | ---------------------------------------------------------------------------- |
-| `hookmux init`                                | Installs the engine and launcher and registers hub entries with your clients |
-| `hookmux uninstall`                           | Removes the hub entries from your clients' configs                           |
-| `hookmux sync`                                | Updates the hub entries to match the events your plugins use                 |
-| `hookmux add <dir>`                           | Installs a plugin folder; `--shadow` installs it in shadow mode              |
-| `hookmux remove <id>`                         | Uninstalls a plugin                                                          |
-| `hookmux enable <id>`, `hookmux disable <id>` | Turns a plugin on or off                                                     |
-| `hookmux promote <id>`                        | Approves a plugin and makes it live; needs an interactive terminal           |
-| `hookmux promote <id> --standing`             | Also lets later `hookmux add` runs of that plugin go live without asking     |
-| `hookmux list`                                | Lists installed plugins and their status; `--json` for scripts               |
-| `hookmux new <id>`                            | Scaffolds `plugin.toml` and `tests.toml`                                     |
-| `hookmux validate <dir>`                      | Checks a plugin folder without installing it                                 |
-| `hookmux test <id>`                           | Runs a plugin's `tests.toml` cases                                           |
-| `hookmux explain "<prompt>"`                  | Shows how every installed plugin decides on a prompt                         |
-| `hookmux doctor`                              | Reports problems with the install, client configs and plugins                |
-| `hookmux log on`, `hookmux log off`           | Turns the decision log on or off                                             |
-| `hookmux schema --json`                       | Prints the manifest schema, check kinds, effects and hosts                   |
+| Command                                           | What it does                                                                 |
+| ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `hookmux init`                                    | Installs the engine and launcher and registers hub entries with your clients |
+| `hookmux uninstall`                               | Removes the hub entries from your clients' configs                           |
+| `hookmux sync`                                    | Updates the hub entries to match the events your plugins use                 |
+| `hookmux add <dir>`                               | Installs a plugin folder; `--shadow` installs it in shadow mode              |
+| `hookmux remove <id>`                             | Uninstalls a plugin                                                          |
+| `hookmux enable <id>`, `hookmux disable <id>`     | Turns a plugin on or off                                                     |
+| `hookmux promote <id>`                            | Approves a plugin and makes it live; needs an interactive terminal           |
+| `hookmux promote <id> --standing`                 | Also lets later `hookmux add` runs of that plugin go live without asking     |
+| `hookmux promote <id>` run by a Claude Code agent | Claude Code asks you to approve the call; approving makes the plugin live    |
+| `hookmux list`                                    | Lists installed plugins and their status; `--json` for scripts               |
+| `hookmux new <id>`                                | Scaffolds `plugin.toml` and `tests.toml`                                     |
+| `hookmux validate <dir>`                          | Checks a plugin folder without installing it                                 |
+| `hookmux test <id>`                               | Runs a plugin's `tests.toml` cases                                           |
+| `hookmux explain "<prompt>"`                      | Shows how every installed plugin decides on a prompt                         |
+| `hookmux doctor`                                  | Reports problems with the install, client configs and plugins                |
+| `hookmux log on`, `hookmux log off`               | Turns the decision log on or off                                             |
+| `hookmux schema --json`                           | Prints the manifest schema, check kinds, effects and hosts                   |
 
 The command set is still growing. `hookmux help` lists the commands in your installed version.
 

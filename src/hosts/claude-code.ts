@@ -99,6 +99,20 @@ export const claudeCode: HostAdapter = {
     return Object.keys(out).length > 0 ? JSON.stringify(out) : "";
   },
 
+  // permissionDecision "ask" shows the permission prompt with updatedInput as the call to approve
+  // (https://code.claude.com/docs/en/hooks.md, PreToolUse decision control). Claude Code 2.1.327
+  // honours it under bypassPermissions too, and refuses the call where no prompt can be shown.
+  confirm(_event, ask) {
+    return JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: NATIVE["tool.before"],
+        permissionDecision: "ask",
+        permissionDecisionReason: ask.reason,
+        updatedInput: ask.input,
+      },
+    });
+  },
+
   sample(event, prompt = "hookmux doctor check") {
     const base = {
       session_id: "hookmux-doctor",
