@@ -102,6 +102,10 @@ export async function approveHubs(paths: HomePaths, results: HostResult[]): Prom
     if (!change || !adapter.config.approve) continue;
     try {
       const r = await adapter.config.approve(paths.launcher);
+      if (r.missing.length > 0) {
+        ok = false;
+        say("warn", `${adapter.name} does not list the hub entries for ${r.missing.join(", ")}`, APPROVE_BY_HAND);
+      }
       if (r.stillUntrusted.length > 0) {
         ok = false;
         say("warn", `${adapter.name}: ${r.stillUntrusted.length} hub entries still need approval`, APPROVE_BY_HAND);

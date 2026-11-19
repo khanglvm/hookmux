@@ -10,13 +10,17 @@
 // managed by policy, is approved. The key and hash come from Codex itself and
 // are never built here. Every other hook keeps its own approval state.
 
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
-import { CANONICAL_EVENTS } from "../core/types.ts";
+import type { CanonicalEvent } from "../core/types.ts";
 import { hubCommand } from "./hub-command.ts";
 
 const DEFAULT_TIMEOUT_MS = 20_000;
+/** How long the server gets to exit after SIGTERM before SIGKILL, so hookmux never waits on it. */
+const KILL_GRACE_MS = 2_000;
 
 /** The HookMetadata fields this module reads. */
 export interface CodexHook {
@@ -33,6 +37,8 @@ export interface ApprovalTarget {
   launcher: string;
   /** The hooks.json hookmux edits for this CODEX_HOME. */
   hooksFile: string;
+  /** Events hookmux has hub entries for in that file; each must show up in Codex's list. */
+  events: readonly CanonicalEvent[];
   env: NodeJS.ProcessEnv;
   /** The codex executable; `codex` on PATH by default. */
   codex?: string;
@@ -46,19 +52,44 @@ export interface ApprovalResult {
   alreadyTrusted: number;
   /** Hub entries still not trusted after the write, by key. */
   stillUntrusted: string[];
+  /** Events whose hub entry Codex does not list in that file, so nothing could approve it. */
+  missing: CanonicalEvent[];
 }
 
-/** Hub entries of this launcher that Codex lists, whatever their trust state. */
-export function hubEntries(hooks: CodexHook[], target: Pick<ApprovalTarget, "launcher" | "hooksFile">): CodexHook[] {
-  const commands = new Set(CANONICAL_EVENTS.map((e) => hubCommand(target.launcher, "codex", e)));
-  return hooks.filter(
+export interface HubListing {
+  entries: CodexHook[];
+  missing: CanonicalEvent[];
+}
+
+type HubScope = Pick<ApprovalTarget, "launcher" | "hooksFile" | "events">;
+
+/** Hub entries of this launcher that Codex lists, whatever their trust state, and the events it lists none for. */
+export function hubEntries(hooks: CodexHook[], target: HubScope): HubListing {
+  const byCommand = new Map(target.events.map((e) => [hubCommand(target.launcher, "codex", e), e]));
+  const sourcePath = codexSourcePath(target.hooksFile);
+  const entries = hooks.filter(
     (h) =>
       h.command !== null &&
-      commands.has(h.command) &&
-      h.sourcePath === target.hooksFile &&
+      byCommand.has(h.command) &&
+      h.sourcePath === sourcePath &&
       h.source === "user" &&
       !h.isManaged,
   );
+  const seen = new Set(entries.map((h) => byCommand.get(h.command as string)));
+  return { entries, missing: target.events.filter((e) => !seen.has(e)) };
+}
+
+/**
+ * Codex reports sourcePath under the realpath of CODEX_HOME (codex-cli 0.170.0),
+ * so a symlinked home, or macOS /tmp and /var, must be resolved to match.
+ */
+function codexSourcePath(hooksFile: string): string {
+  try {
+    return join(realpathSync(dirname(hooksFile)), basename(hooksFile));
+  } catch {
+    // No such folder: Codex lists nothing from it either, and the event shows up as missing.
+    return hooksFile;
+  }
 }
 
 function needsApproval(hook: CodexHook): boolean {
@@ -68,9 +99,9 @@ function needsApproval(hook: CodexHook): boolean {
 /** Lists hooks, approves hookmux's untrusted hub entries, then lists again to confirm. */
 export async function approveHubEntries(target: ApprovalTarget): Promise<ApprovalResult> {
   return withAppServer(target, async (call) => {
-    const listed = hubEntries(await listHooks(call), target);
+    const { entries: listed, missing } = hubEntries(await listHooks(call), target);
     const pending = listed.filter(needsApproval);
-    if (pending.length === 0) return { approved: [], alreadyTrusted: listed.length, stillUntrusted: [] };
+    if (pending.length === 0) return { approved: [], alreadyTrusted: listed.length, stillUntrusted: [], missing };
     await call("config/batchWrite", {
       edits: pending.map((h) => ({
         keyPath: `hooks.state.${tomlKey(h.key)}.trusted_hash`,
@@ -78,17 +109,18 @@ export async function approveHubEntries(target: ApprovalTarget): Promise<Approva
         value: h.currentHash,
       })),
     });
-    const after = hubEntries(await listHooks(call), target);
+    const after = hubEntries(await listHooks(call), target).entries;
     return {
       approved: pending.map((h) => h.key).filter((k) => after.some((h) => h.key === k && h.trustStatus === "trusted")),
       alreadyTrusted: listed.length - pending.length,
       stillUntrusted: after.filter(needsApproval).map((h) => h.key),
+      missing,
     };
   });
 }
 
 /** Hub entries and their trust state, for doctor. */
-export async function listHubEntries(target: ApprovalTarget): Promise<CodexHook[]> {
+export async function listHubEntries(target: ApprovalTarget): Promise<HubListing> {
   return withAppServer(target, async (call) => hubEntries(await listHooks(call), target));
 }
 
@@ -124,13 +156,16 @@ async function withAppServer<T>(target: ApprovalTarget, body: (call: Call) => Pr
   };
   child.on("error", (error) => failAll(new Error(`could not start codex app-server: ${error.message}`)));
   child.on("exit", (code) => failAll(new Error(`codex app-server exited (${code ?? "signal"})`)));
+  child.stdin.on("error", (error) => failAll(new Error(`codex app-server closed its input: ${error.message}`)));
   createInterface({ input: child.stdout }).on("line", (line) => {
-    let message: { id?: number; result?: unknown; error?: { message?: string } };
+    let message: { id?: number; method?: string; result?: unknown; error?: { message?: string } };
     try {
       message = JSON.parse(line);
     } catch {
       return;
     }
+    // A message with a method is the server's own request or notification; its id is not one of ours.
+    if (message.method !== undefined) return;
     const w = typeof message.id === "number" ? waiting.get(message.id) : undefined;
     if (!w) return;
     waiting.delete(message.id as number);
@@ -155,7 +190,17 @@ async function withAppServer<T>(target: ApprovalTarget, body: (call: Call) => Pr
     return await body(call);
   } finally {
     clearTimeout(timer);
-    child.stdin.end();
-    child.kill();
+    await stop(child);
   }
+}
+
+/** Ends the server: SIGTERM, then SIGKILL after KILL_GRACE_MS, and waits for it to exit. */
+async function stop(child: ChildProcess): Promise<void> {
+  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+  child.stdin?.end();
+  child.kill();
+  const escalate = setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS);
+  await exited;
+  clearTimeout(escalate);
 }

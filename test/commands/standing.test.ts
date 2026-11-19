@@ -1,12 +1,13 @@
 // Standing approvals (promote --standing) and Codex hub approval through the fake app-server.
 
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { approveHubEntries } from "../../src/hosts/codex-trust.ts";
 import { isCapabilitySubset, readTrust, writeTrust } from "../../src/load/trust.ts";
 import { homePaths } from "../../src/runtime/paths.ts";
-import { cli, moodboardCopy, type Sandbox, sandbox, trustInstalled } from "./helpers.ts";
+import { cli, FAKE_CODEX, moodboardCopy, type Sandbox, sandbox, trustInstalled } from "./helpers.ts";
 
 /** Stands in for an interactive `promote --standing`: pins the plugin and grants `ceiling`. */
 function grantStanding(sb: Sandbox, id: string, ceiling?: string[]): void {
@@ -152,4 +153,35 @@ test("doctor reports a Codex hub entry whose approved hash no longer matches", a
   for (const key of Object.keys(trust)) trust[key] = "sha256:stale";
   writeFileSync(join(sb.env.CODEX_HOME as string, "fake-trust.json"), JSON.stringify(trust));
   assert.match((await cli(sb, "doctor")).stdout, /Codex has not approved: .*\(modified\)/);
+});
+
+test("a symlinked CODEX_HOME still gets its hub entries approved", async () => {
+  const sb = sandbox();
+  const real = join(sb.dir, "real-codex");
+  mkdirSync(real);
+  symlinkSync(real, join(sb.dir, "codex-link"));
+  sb.env.CODEX_HOME = join(sb.dir, "codex-link");
+  const r = await initCodex(sb);
+  assert.equal(r.code, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /Codex: approved 2 hub entries/);
+});
+
+test("hub entries Codex does not list count as unapproved", async () => {
+  const sb = sandbox();
+  sb.env.FAKE_CODEX_FAIL = "empty";
+  const r = await initCodex(sb);
+  assert.equal(r.code, 1);
+  assert.match(r.stdout, /Codex does not list the hub entries for prompt\.submit, session\.start/);
+  assert.match((await cli(sb, "doctor")).stdout, /Codex has not approved: .*\(not listed by Codex\)/);
+});
+
+test("an app-server that ignores SIGTERM is killed after the timeout", async () => {
+  const sb = sandbox();
+  const home = sb.env.CODEX_HOME as string;
+  mkdirSync(home, { recursive: true });
+  const env = { ...sb.env, FAKE_CODEX_FAIL: "hang" };
+  const target = { launcher: "/x", hooksFile: join(home, "hooks.json"), events: [], env, codex: FAKE_CODEX };
+  await assert.rejects(approveHubEntries({ ...target, timeoutMs: 300 }), /did not answer in time/);
+  const pid = Number(readFileSync(join(home, "fake.pid"), "utf8"));
+  assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
 });

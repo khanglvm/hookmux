@@ -198,7 +198,13 @@ export const codex: HostAdapter = {
     },
     // Untrusted new or changed hooks are skipped (hooks/src/engine/discovery.rs:917-940).
     approve(launcher, env = process.env) {
-      return approveHubEntries({ launcher, hooksFile: this.file(env), env, codex: env.HOOKMUX_CODEX || "codex" });
+      return approveHubEntries({
+        launcher,
+        hooksFile: this.file(env),
+        events: this.installed(launcher, env),
+        env,
+        codex: env.HOOKMUX_CODEX || "codex",
+      });
     },
   },
   // ~/.agents/skills is the user skill root; $CODEX_HOME/skills is kept only as a

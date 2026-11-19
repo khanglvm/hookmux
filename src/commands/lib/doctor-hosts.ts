@@ -71,7 +71,7 @@ async function checkHost(adapter: HostAdapter, paths: HomePaths, needed: Canonic
     });
   } else out.push({ id, status: "ok", title: `${adapter.name}: hub entries for ${installed.join(", ")} (${file})` });
   out.push(await liveRun(adapter, paths));
-  out.push(...((await HOST_PROBES[adapter.id]?.(adapter, paths)) ?? []));
+  out.push(...((await HOST_PROBES[adapter.id]?.(adapter, paths, installed)) ?? []));
   return out;
 }
 
@@ -115,23 +115,27 @@ async function liveRun(adapter: HostAdapter, paths: HomePaths): Promise<Finding>
   }
 }
 
-type HostProbe = (adapter: HostAdapter, paths: HomePaths) => Promise<Finding[]>;
+type HostProbe = (adapter: HostAdapter, paths: HomePaths, installed: CanonicalEvent[]) => Promise<Finding[]>;
 
 /** Host-specific extras that the adapter contract does not cover. */
 const HOST_PROBES: Record<string, HostProbe> = { codex: codexApprovals };
 
 /** Asks Codex itself which hub entries it trusts, so an entry whose hash changed counts as unapproved. */
-async function codexApprovals(adapter: HostAdapter, paths: HomePaths): Promise<Finding[]> {
+async function codexApprovals(adapter: HostAdapter, paths: HomePaths, installed: CanonicalEvent[]): Promise<Finding[]> {
   const id = `host.${adapter.id}.approval`;
   const fix = "hookmux sync";
   try {
-    const entries = await listHubEntries({
+    const { entries, missing } = await listHubEntries({
       launcher: paths.launcher,
       hooksFile: adapter.config.file(),
+      events: installed,
       env: process.env,
       codex: process.env.HOOKMUX_CODEX || "codex",
     });
-    const unapproved = entries.filter((e) => e.trustStatus !== "trusted").map((e) => `${e.key} (${e.trustStatus})`);
+    const unapproved = [
+      ...entries.filter((e) => e.trustStatus !== "trusted").map((e) => `${e.key} (${e.trustStatus})`),
+      ...missing.map((e) => `${e} (not listed by Codex)`),
+    ];
     return unapproved.length > 0
       ? [{ id, status: "warn", title: `${adapter.name} has not approved: ${unapproved.join(", ")}`, fix }]
       : [{ id, status: "ok", title: `${adapter.name}: ${entries.length} hub entries approved` }];

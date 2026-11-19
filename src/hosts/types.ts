@@ -63,4 +63,6 @@ export interface HubApproval {
   approved: string[];
   alreadyTrusted: number;
   stillUntrusted: string[];
+  /** Events with a hub entry in the config that the host does not list, so they stay unapproved. */
+  missing: CanonicalEvent[];
 }

@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 // Stands in for `codex app-server` in tests: answers initialize, hooks/list and
 // config/batchWrite for the hooks.json in $CODEX_HOME, keeping trust in
-// $CODEX_HOME/fake-trust.json. FAKE_CODEX_FAIL=list makes hooks/list fail and
-// FAKE_CODEX_FAIL=write makes batchWrite store nothing.
+// $CODEX_HOME/fake-trust.json. FAKE_CODEX_FAIL=list makes hooks/list fail,
+// =write makes batchWrite store nothing, =empty lists no hooks, and =hang
+// ignores SIGTERM and answers nothing after writing its pid to fake.pid.
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
-const home = process.env.CODEX_HOME;
+// Real Codex resolves CODEX_HOME to its realpath before it reports paths.
+const home = realpathSync(process.env.CODEX_HOME);
 const hooksFile = join(home, "hooks.json");
 const trustFile = join(home, "fake-trust.json");
 const readJson = (file, fallback) => (existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : fallback);
@@ -43,12 +45,20 @@ const answer = (id, result) => process.stdout.write(`${JSON.stringify({ jsonrpc:
 const fail = (id, message) =>
   process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, error: { code: -1, message } })}\n`);
 
+if (process.env.FAKE_CODEX_FAIL === "hang") {
+  writeFileSync(join(home, "fake.pid"), String(process.pid));
+  process.on("SIGTERM", () => {});
+  setInterval(() => {}, 1000);
+}
+
 createInterface({ input: process.stdin }).on("line", (line) => {
+  if (process.env.FAKE_CODEX_FAIL === "hang") return;
   const { id, method, params } = JSON.parse(line);
   if (id === undefined) return;
   if (method === "initialize") return answer(id, { codexHome: home });
   if (method === "hooks/list") {
     if (process.env.FAKE_CODEX_FAIL === "list") return fail(id, "hooks/list failed");
+    if (process.env.FAKE_CODEX_FAIL === "empty") return answer(id, { data: [{ cwd: params.cwds[0], hooks: [] }] });
     return answer(id, { data: [{ cwd: params.cwds[0], hooks: hooks(), warnings: [], errors: [] }] });
   }
   if (method === "config/batchWrite") {
