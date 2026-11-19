@@ -264,7 +264,7 @@ A script runs from a private copy of the bytes that matched its hash, in `~/.hoo
 
 ## Trust
 
-`hookmux promote <id>` records a SHA-256 hash of the plugin folder and the capabilities it has with your `config.toml` overrides applied. If any file in the folder changes afterwards, or an override adds a capability (an event, a block effect, a script or model check), the plugin stops running until you promote it again.
+`hookmux promote <id>` records a SHA-256 hash of the plugin folder and the capabilities it has with your `config.toml` overrides applied. If any file in the folder changes afterwards, or an override adds a capability (an event, a block effect, a script or model check), the plugin stops running until you promote it again. With a standing approval (`hookmux promote <id> --standing`), `hookmux add --force` of a new version goes live without asking while its capabilities stay within the approved ones; a higher approved `evidence_chars` limit covers a lower one.
 
 Promote asks you to type `y` and never takes `--yes`. It refuses when stdin is not a terminal, and when it finds the environment variables Claude Code, Codex or Gemini CLI set on the commands they run, even on a terminal. That is a checkpoint against an agent activating a plugin because of an injected instruction or by accident. It is not a sandbox: a process running as you can still edit `trust.json` or clear its environment.
 

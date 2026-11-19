@@ -6,7 +6,7 @@
 
 import { relative } from "node:path";
 import { readFlagsForUpdate, writeFlags } from "../../load/flags.ts";
-import { isCapabilitySubset, listPluginFiles, readTrust, writeTrust } from "../../load/trust.ts";
+import { isCapabilitySubset, listPluginFiles, readTrust, uncoveredCapabilities, writeTrust } from "../../load/trust.ts";
 import type { HomePaths } from "../../runtime/paths.ts";
 import { type ActivationRefusal, activationRefusal, agentMarker } from "./agent-env.ts";
 import { syncAfterChange } from "./hosts.ts";
@@ -14,8 +14,15 @@ import { bold, detail, say } from "./output.ts";
 import { inspectInstalled, installedDir, isInstalled } from "./plugins.ts";
 import { confirm, isInteractive } from "./prompt.ts";
 
+export interface PromoteOptions {
+  assumeYes: boolean;
+  /** Also grant a standing approval with the plugin's current capabilities as the ceiling. */
+  standing?: boolean;
+}
+
 /** Exit code: 0 promoted (or already active), 1 refused, declined or not promotable. */
-export async function promotePlugin(paths: HomePaths, id: string, assumeYes: boolean): Promise<number> {
+export async function promotePlugin(paths: HomePaths, id: string, opts: PromoteOptions): Promise<number> {
+  const { assumeYes, standing = false } = opts;
   const refusal = activationRefusal({ assumeYes, interactive: isInteractive(), env: process.env });
   if (refusal) {
     sayRefusal(refusal, id);
@@ -38,23 +45,90 @@ export async function promotePlugin(paths: HomePaths, id: string, assumeYes: boo
   const flags = readFlagsForUpdate(paths.flags);
   const sameContent = previous?.hash === hash;
   const capsCovered = previous !== undefined && isCapabilitySubset(capabilities, previous.capabilities);
-  if (sameContent && capsCovered && !flags.shadow.includes(id)) {
+  const standingCovered =
+    previous?.standing !== undefined && isCapabilitySubset(capabilities, previous.standing.capabilities);
+  if (sameContent && capsCovered && !flags.shadow.includes(id) && (!standing || standingCovered)) {
     say("ok", `${id} is already promoted and unchanged since ${previous.promotedAt}`);
     return 0;
   }
   describe(id, dir, capabilities, previous ? (sameContent ? (capsCovered ? "same" : "caps") : "changed") : "new");
   if (previous) detail(`last promoted ${previous.promotedAt}`);
-  if (!(await confirm(`Activate ${id}?`, false))) {
+  if (standing) describeStanding(id, capabilities);
+  if (!(await confirm(standing ? `Activate ${id} and grant the standing approval?` : `Activate ${id}?`, false))) {
     say("info", `${id} left as it was`);
     return 1;
   }
+  const now = new Date().toISOString();
   const trust = readTrust(paths.trust);
-  trust.plugins[id] = { hash, capabilities, promotedAt: new Date().toISOString() };
+  const kept = standing ? { capabilities, grantedAt: now } : previous?.standing;
+  trust.plugins[id] = { hash, capabilities, promotedAt: now, via: "promote", ...(kept ? { standing: kept } : {}) };
   writeTrust(paths.trust, trust);
   writeFlags(paths.flags, { ...flags, shadow: flags.shadow.filter((s) => s !== id) });
   say("ok", `${id} promoted; it runs on the next hook event`);
-  syncAfterChange(paths);
+  await syncAfterChange(paths);
   return 0;
+}
+
+/**
+ * Pins the installed content of each plugin that holds a standing approval
+ * covering its capabilities, without asking. Plugins in shadow mode are left
+ * for promote. Returns the ids it pinned.
+ */
+export function applyStandingApprovals(paths: HomePaths, ids: string[]): string[] {
+  const trust = readTrust(paths.trust);
+  const flags = readFlagsForUpdate(paths.flags);
+  const rows = inspectInstalled(paths).rows;
+  const pinned: string[] = [];
+  for (const id of ids) {
+    const grant = trust.plugins[id]?.standing;
+    if (!grant) continue;
+    const row = rows.find((r) => r.id === id);
+    if (!row || row.status === "invalid" || row.entry.hash === undefined) continue;
+    if (flags.shadow.includes(id)) {
+      say("info", `${id} is in shadow mode, so its standing approval is not applied`, `hookmux promote ${id}`);
+      continue;
+    }
+    const beyond = uncoveredCapabilities(row.entry.capabilities, grant.capabilities);
+    if (beyond.length > 0) {
+      say("warn", `${id} now needs ${beyond.join(", ")}, beyond its standing approval`, `hookmux promote ${id}`);
+      continue;
+    }
+    const now = new Date().toISOString();
+    trust.plugins[id] = {
+      hash: row.entry.hash,
+      capabilities: row.entry.capabilities,
+      promotedAt: now,
+      via: "standing",
+      standing: grant,
+    };
+    pinned.push(id);
+    say("ok", `${id} activated under the standing approval granted ${grant.grantedAt}`);
+  }
+  if (pinned.length > 0) writeTrust(paths.trust, trust);
+  return pinned;
+}
+
+/** Ends a plugin's standing approval; its current pin stays. Needs no terminal: it only takes trust away. */
+export function endStanding(paths: HomePaths, id: string): number {
+  const trust = readTrust(paths.trust);
+  const entry = trust.plugins[id];
+  if (!entry?.standing) {
+    say("info", `${id} has no standing approval`);
+    return 0;
+  }
+  delete entry.standing;
+  writeTrust(paths.trust, trust);
+  say("ok", `${id}: standing approval ended; later changes need hookmux promote ${id}`);
+  return 0;
+}
+
+function describeStanding(id: string, capabilities: string[]): void {
+  detail("standing approval:");
+  detail(`  later \`hookmux add\` runs replace and activate ${id} without asking while it needs`);
+  detail(`  no more than: ${capabilities.join(", ") || "none"}`);
+  detail("  anyone who can run hookmux add (agents included) can then change its files within that;");
+  detail("  matchers, folder globs and the phase are not part of the ceiling.");
+  detail(`  end it any time: hookmux promote ${id} --end-standing`);
 }
 
 function sayRefusal(refusal: ActivationRefusal, id: string): void {

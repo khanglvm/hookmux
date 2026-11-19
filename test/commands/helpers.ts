@@ -15,6 +15,7 @@ import { homePaths } from "../../src/runtime/paths.ts";
 
 export const ROOT = new URL("../../", import.meta.url).pathname;
 export const MOODBOARD = join(ROOT, "examples", "moodboard");
+export const FAKE_CODEX = join(ROOT, "test", "fixtures", "fake-codex.mjs");
 
 export interface Sandbox {
   dir: string;
@@ -42,6 +43,7 @@ export function sandbox(): Sandbox {
     HOOKMUX_HOME: join(dir, "hookmux"),
     CLAUDE_CONFIG_DIR: claude,
     CODEX_HOME: join(dir, "user", ".codex"),
+    HOOKMUX_CODEX: FAKE_CODEX,
     NO_COLOR: "1",
   };
   return { dir, home: env.HOOKMUX_HOME, claude, env };

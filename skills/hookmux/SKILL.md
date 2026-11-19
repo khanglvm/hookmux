@@ -76,4 +76,4 @@ hookmux promote <id>
 
 Promote asks the user to type `y`. It refuses without an interactive terminal, refuses `--yes`, and refuses inside your environment; that refusal is the approval step working. Leave promotion entirely to the user: hand over the command and stop there. Running it through a pseudo-terminal, adding `--yes`, editing `~/.hookmux/trust.json` or the registry, and turning on `auto_trust_declarative` are all ways around the user's approval, so none of them is yours to do.
 
-Any later edit to the plugin folder un-trusts it until the user promotes it again. Say so when you change a live plugin.
+Any later edit to the plugin folder un-trusts it until the user promotes it again. Say so when you change a live plugin. If the user granted a standing approval (`hookmux promote <id> --standing`), reinstall the changed plugin with `hookmux add <dir> --force` and it goes live while its capabilities stay within that approval; a new capability still needs the user's promote.

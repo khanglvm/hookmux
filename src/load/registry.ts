@@ -34,6 +34,7 @@ import {
   readPluginFiles,
   readTrust,
   type TrustEntry,
+  uncoveredCapabilities,
 } from "./trust.ts";
 
 export function compileRegistry(paths: HomePaths): Registry {
@@ -166,7 +167,7 @@ function trustDecision(input: {
   if (autoTrustDeclarative && isDeclarativeOnly(capabilities)) return { trusted: true };
   if (!pinned) return { trusted: false, problem: "not promoted yet" };
   if (pinned.hash !== hash) return { trusted: false, problem: "content changed since promote" };
-  const added = capabilities.filter((c) => !pinned.capabilities.includes(c));
+  const added = uncoveredCapabilities(capabilities, pinned.capabilities);
   if (added.length === 0) return { trusted: true };
   return { trusted: false, problem: `config override adds ${added.join(", ")}; run hookmux promote ${id}` };
 }

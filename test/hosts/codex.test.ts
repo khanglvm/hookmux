@@ -184,12 +184,11 @@ function codexHome(): { dir: string; env: NodeJS.ProcessEnv; file: string } {
   return { dir, env: { CODEX_HOME: dir }, file: join(dir, "hooks.json") };
 }
 
-test("codex writes $CODEX_HOME/hooks.json with the timeout in seconds and an approval note", () => {
+test("codex writes $CODEX_HOME/hooks.json with the timeout in seconds", () => {
   const { dir, env, file } = codexHome();
   assertFileUnder(codex, env, dir);
   assert.equal(codex.config.file(env), file);
-  const change = codex.config.install({ launcher: LAUNCHER, events: ["tool.before"], timeoutSec: 7 }, env);
-  assert.ok(change.notes.some((n) => n.includes("/hooks")));
+  codex.config.install({ launcher: LAUNCHER, events: ["tool.before"], timeoutSec: 7 }, env);
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), {
     hooks: {
       PreToolUse: [
@@ -199,7 +198,6 @@ test("codex writes $CODEX_HOME/hooks.json with the timeout in seconds and an app
   });
   const again = codex.config.install({ launcher: LAUNCHER, events: ["tool.before"], timeoutSec: 7 }, env);
   assert.equal(again.changed, false);
-  assert.ok(again.notes.some((n) => n.includes("/hooks")));
 });
 
 test("codex refuses a hooks.json with root keys Codex rejects, without writing", () => {

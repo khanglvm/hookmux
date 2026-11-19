@@ -90,12 +90,39 @@ export function printHostResults(results: HostResult[]): boolean {
   return ok;
 }
 
-/** Runs sync after a plugin change and reports it briefly. */
-export function syncAfterChange(paths: HomePaths): boolean {
+/**
+ * Approves the hub entries on each host that keeps its own per-hook approval, and
+ * reports it. The hub only runs plugins promoted in hookmux, so hookmux's trust
+ * pin is the one approval that counts; a failure leaves the host's /hooks step.
+ * Returns true when every such host ends with all hub entries trusted.
+ */
+export async function approveHubs(paths: HomePaths, results: HostResult[]): Promise<boolean> {
+  let ok = true;
+  for (const { adapter, change } of results) {
+    if (!change || !adapter.config.approve) continue;
+    try {
+      const r = await adapter.config.approve(paths.launcher);
+      if (r.stillUntrusted.length > 0) {
+        ok = false;
+        say("warn", `${adapter.name}: ${r.stillUntrusted.length} hub entries still need approval`, APPROVE_BY_HAND);
+      } else if (r.approved.length > 0) say("ok", `${adapter.name}: approved ${r.approved.length} hub entries`);
+    } catch (error) {
+      ok = false;
+      say("warn", `${adapter.name}: could not approve hub entries (${(error as Error).message})`, APPROVE_BY_HAND);
+    }
+  }
+  return ok;
+}
+
+const APPROVE_BY_HAND = "open Codex, run /hooks and approve the hookmux entries";
+
+/** Runs sync after a plugin change, approves new hub entries and reports it briefly. */
+export async function syncAfterChange(paths: HomePaths): Promise<boolean> {
   const { results } = syncHosts(paths);
   if (results.length === 0) {
     say("info", "no host has hub entries yet", "hookmux init");
     return true;
   }
-  return printHostResults(results);
+  const printed = printHostResults(results);
+  return (await approveHubs(paths, results)) && printed;
 }

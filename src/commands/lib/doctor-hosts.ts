@@ -4,13 +4,9 @@
 
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { promisify } from "node:util";
-import { parse as parseToml } from "smol-toml";
 import type { CanonicalEvent } from "../../core/types.ts";
-import { isHubCommand } from "../../hosts/hub-command.ts";
+import { listHubEntries } from "../../hosts/codex-trust.ts";
 import type { HostAdapter } from "../../hosts/types.ts";
 import type { HomePaths } from "../../runtime/paths.ts";
 import type { Finding } from "./doctor-checks.ts";
@@ -75,7 +71,7 @@ async function checkHost(adapter: HostAdapter, paths: HomePaths, needed: Canonic
     });
   } else out.push({ id, status: "ok", title: `${adapter.name}: hub entries for ${installed.join(", ")} (${file})` });
   out.push(await liveRun(adapter, paths));
-  out.push(...(HOST_PROBES[adapter.id]?.(adapter, paths, installed) ?? []));
+  out.push(...((await HOST_PROBES[adapter.id]?.(adapter, paths)) ?? []));
   return out;
 }
 
@@ -119,48 +115,34 @@ async function liveRun(adapter: HostAdapter, paths: HomePaths): Promise<Finding>
   }
 }
 
-type HostProbe = (adapter: HostAdapter, paths: HomePaths, installed: CanonicalEvent[]) => Finding[];
+type HostProbe = (adapter: HostAdapter, paths: HomePaths) => Promise<Finding[]>;
 
 /** Host-specific extras that the adapter contract does not cover. */
 const HOST_PROBES: Record<string, HostProbe> = { codex: codexApprovals };
 
-/** "UserPromptSubmit" → "user_prompt_submit", the event label Codex uses in its trust keys. */
-export function snakeCase(name: string): string {
-  return name.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
-}
-
-/**
- * Codex trusts each hook by `[hooks.state."<hooks.json>:<event>:<group>:<handler>"]`
- * with a `trusted_hash`. Best effort: any read failure becomes a hint to use /hooks.
- */
-function codexApprovals(adapter: HostAdapter, paths: HomePaths, installed: CanonicalEvent[]): Finding[] {
+/** Asks Codex itself which hub entries it trusts, so an entry whose hash changed counts as unapproved. */
+async function codexApprovals(adapter: HostAdapter, paths: HomePaths): Promise<Finding[]> {
   const id = `host.${adapter.id}.approval`;
-  const hint = "open Codex, run /hooks and approve the hookmux entries";
+  const fix = "hookmux sync";
   try {
-    const home = process.env.CODEX_HOME || join(homedir(), ".codex");
-    const config = parseToml(readFileSync(join(home, "config.toml"), "utf8")) as {
-      hooks?: { state?: Record<string, { trusted_hash?: unknown }> };
-    };
-    const state = config.hooks?.state ?? {};
-    const hooksFile = adapter.config.file();
-    const table =
-      (JSON.parse(readFileSync(hooksFile, "utf8")) as { hooks?: Record<string, { hooks?: { command?: unknown }[] }[]> })
-        .hooks ?? {};
-    const unapproved: string[] = [];
-    for (const event of installed) {
-      const native = adapter.nativeEvents[event] as string;
-      (table[native] ?? []).forEach((group, g) => {
-        (group.hooks ?? []).forEach((handler, h) => {
-          if (!isHubCommand(handler.command, paths.launcher)) return;
-          if (typeof state[`${hooksFile}:${snakeCase(native)}:${g}:${h}`]?.trusted_hash !== "string")
-            unapproved.push(event);
-        });
-      });
-    }
+    const entries = await listHubEntries({
+      launcher: paths.launcher,
+      hooksFile: adapter.config.file(),
+      env: process.env,
+      codex: process.env.HOOKMUX_CODEX || "codex",
+    });
+    const unapproved = entries.filter((e) => e.trustStatus !== "trusted").map((e) => `${e.key} (${e.trustStatus})`);
     return unapproved.length > 0
-      ? [{ id, status: "warn", title: `${adapter.name} has not approved: ${unapproved.join(", ")}`, fix: hint }]
-      : [{ id, status: "ok", title: `${adapter.name}: hub entries approved` }];
-  } catch {
-    return [{ id, status: "warn", title: `${adapter.name}: could not read hook approvals`, fix: hint }];
+      ? [{ id, status: "warn", title: `${adapter.name} has not approved: ${unapproved.join(", ")}`, fix }]
+      : [{ id, status: "ok", title: `${adapter.name}: ${entries.length} hub entries approved` }];
+  } catch (error) {
+    return [
+      {
+        id,
+        status: "warn",
+        title: `${adapter.name}: could not read hook approvals (${(error as Error).message})`,
+        fix: "open Codex, run /hooks and check the hookmux entries",
+      },
+    ];
   }
 }

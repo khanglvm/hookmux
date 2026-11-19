@@ -17,12 +17,13 @@ import { parseCommand, UsageError } from "./lib/args.ts";
 import { syncAfterChange } from "./lib/hosts.ts";
 import { detail, say } from "./lib/output.ts";
 import { loadDefaults } from "./lib/plugins.ts";
-import { promotePlugin } from "./lib/promote.ts";
+import { applyStandingApprovals, promotePlugin } from "./lib/promote.ts";
 import { isInteractive } from "./lib/prompt.ts";
 
 export const usage = `Usage: hookmux add <source> [--plugin <id>]... [--shadow] [--list] [--force]
 
-Copies plugins into the hookmux home. They stay untrusted until promoted.
+Copies plugins into the hookmux home. They stay untrusted until promoted,
+unless a standing approval (hookmux promote <id> --standing) covers them.
 
 Sources:
   ./path or /path                 a local folder (an existing path always wins)
@@ -84,11 +85,12 @@ export async function run(argv: string[]): Promise<number> {
     fetched.cleanup();
   }
   if (added.length === 0) return 1;
-  if (!syncAfterChange(paths)) ok = false;
+  const standing = applyStandingApprovals(paths, added);
+  if (!(await syncAfterChange(paths))) ok = false;
   // Offer to promote only where promote itself would ask; elsewhere print the command.
   const canAsk = isInteractive() && agentMarker(process.env) === undefined;
-  for (const id of added) {
-    if (canAsk) await promotePlugin(paths, id, false);
+  for (const id of added.filter((a) => !standing.includes(a))) {
+    if (canAsk) await promotePlugin(paths, id, { assumeYes: false });
     else say("info", `${id} is untrusted until you promote it in your own terminal`, `hookmux promote ${id}`);
   }
   return ok ? 0 : 1;

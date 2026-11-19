@@ -39,5 +39,5 @@ export async function run(argv: string[]): Promise<number> {
     disabled: flags.disabled.filter((s) => s !== id),
   });
   say("ok", `removed ${id}`);
-  return syncAfterChange(paths) ? 0 : 1;
+  return (await syncAfterChange(paths)) ? 0 : 1;
 }

@@ -3,7 +3,7 @@
 
 import { homePaths } from "../runtime/paths.ts";
 import { parseCommand } from "./lib/args.ts";
-import { printHostResults, syncHosts } from "./lib/hosts.ts";
+import { approveHubs, printHostResults, syncHosts } from "./lib/hosts.ts";
 import { say } from "./lib/output.ts";
 
 export const usage = `Usage: hookmux sync
@@ -13,11 +13,13 @@ hookmux hub entries. add, remove, enable and promote run it for you.`;
 
 export async function run(argv: string[]): Promise<number> {
   if (!parseCommand(argv, {}, usage)) return 0;
-  const { events, results } = syncHosts(homePaths());
+  const paths = homePaths();
+  const { events, results } = syncHosts(paths);
   if (results.length === 0) {
     say("warn", "no host has hub entries yet", "hookmux init");
     return 1;
   }
   say("info", `events needed: ${events.join(", ")}`);
-  return printHostResults(results) ? 0 : 1;
+  const printed = printHostResults(results);
+  return (await approveHubs(paths, results)) && printed ? 0 : 1;
 }

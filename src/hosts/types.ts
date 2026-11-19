@@ -55,4 +55,12 @@ export interface HostConfigEditor {
   install(entry: HubEntry, env?: NodeJS.ProcessEnv): ConfigChange;
   /** Removes hub entries only. */
   uninstall(launcher: string, env?: NodeJS.ProcessEnv): ConfigChange;
+  /** Marks this launcher's hub entries trusted, for a host that asks a person to approve each hook. */
+  approve?(launcher: string, env?: NodeJS.ProcessEnv): Promise<HubApproval>;
+}
+
+export interface HubApproval {
+  approved: string[];
+  alreadyTrusted: number;
+  stillUntrusted: string[];
 }

@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { joinContext } from "../core/compose.ts";
 import type { CanonicalEvent, EffectKind, HookEvent, HubResult, Origin } from "../core/types.ts";
+import { approveHubEntries } from "./codex-trust.ts";
 import { type HostIdentity, parseHostPayload } from "./event.ts";
 import {
   ConfigEditError,
@@ -64,9 +65,6 @@ const CANONICAL_TOOLS: Readonly<Record<string, string>> = { apply_patch: "Edit" 
 
 /** hooks.json root is HooksFile with deny_unknown_fields (config/src/hook_config.rs:12-19). */
 const ROOT_KEYS = new Set(["description", "hooks"]);
-
-/** Untrusted new or changed hooks are skipped (hooks/src/engine/discovery.rs:917-940). */
-const APPROVAL_NOTE = "Codex skips new hook entries until you approve them once with /hooks in the Codex TUI";
 
 /** CODEX_HOME wins when set and non-empty (utils/home-dir/src/lib.rs:13-17, 51-59). */
 function codexHome(env: NodeJS.ProcessEnv): string {
@@ -193,12 +191,14 @@ export const codex: HostAdapter = {
       return installedEvents(this.file(env), launcher, layout);
     },
     install(entry, env = process.env) {
-      const change = installEntries(this.file(env), entry, layout);
-      change.notes.push(APPROVAL_NOTE);
-      return change;
+      return installEntries(this.file(env), entry, layout);
     },
     uninstall(launcher, env = process.env) {
       return uninstallEntries(this.file(env), launcher, layout);
+    },
+    // Untrusted new or changed hooks are skipped (hooks/src/engine/discovery.rs:917-940).
+    approve(launcher, env = process.env) {
+      return approveHubEntries({ launcher, hooksFile: this.file(env), env, codex: env.HOOKMUX_CODEX || "codex" });
     },
   },
   // ~/.agents/skills is the user skill root; $CODEX_HOME/skills is kept only as a

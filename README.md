@@ -86,7 +86,7 @@ Effects each client supports per event:
 | Gemini CLI  | inject, block, notify | inject, notify  | block, notify         | inject, block, notify |
 <!-- hosts:end -->
 
-Notes on each client, including the Codex and Gemini CLI adapters, are in [docs/hosts.md](docs/hosts.md). On Codex, every new or changed hook entry must be approved once in its `/hooks` screen before it runs.
+Notes on each client, including the Codex and Gemini CLI adapters, are in [docs/hosts.md](docs/hosts.md). Codex runs a new or changed hook entry only once it is approved. `init` and `sync` approve hookmux's own hub entries through `codex app-server` and leave every other hook as it was; if that fails, approve them in Codex's `/hooks` screen.
 
 ## Commands
 
@@ -99,6 +99,7 @@ Notes on each client, including the Codex and Gemini CLI adapters, are in [docs/
 | `hookmux remove <id>`                         | Uninstalls a plugin                                                          |
 | `hookmux enable <id>`, `hookmux disable <id>` | Turns a plugin on or off                                                     |
 | `hookmux promote <id>`                        | Approves a plugin and makes it live; needs an interactive terminal           |
+| `hookmux promote <id> --standing`             | Also lets later `hookmux add` runs of that plugin go live without asking     |
 | `hookmux list`                                | Lists installed plugins and their status; `--json` for scripts               |
 | `hookmux new <id>`                            | Scaffolds `plugin.toml` and `tests.toml`                                     |
 | `hookmux validate <dir>`                      | Checks a plugin folder without installing it                                 |
@@ -113,7 +114,7 @@ The command set is still growing. `hookmux help` lists the commands in your inst
 ## Safety model
 
 - Fail-open. If Node or the engine is missing, or the engine fails, hangs or runs past its deadline, the launcher prints nothing and exits 0, which every client treats as "no opinion". A check that errors or times out counts as unknown and never blocks. Because a guard that stops running stops blocking without a sound, every session start shows you a notice that names a guard plugin waiting for promote, or a plugin that does not load.
-- Trust pins. `hookmux promote` records a SHA-256 hash of the plugin folder and the capabilities it has with your `config.toml` overrides. If a file changes afterwards, whether by you, an agent or an update, or an override adds a capability, the plugin stops running until you promote it again.
+- Trust pins. `hookmux promote` records a SHA-256 hash of the plugin folder and the capabilities it has with your `config.toml` overrides. If a file changes afterwards, whether by you, an agent or an update, or an override adds a capability, the plugin stops running until you promote it again. A plugin you change often can get a standing approval (`hookmux promote <id> --standing`): a later `hookmux add` of it goes live without asking while it needs no capability beyond the ones you approved. Anyone who can run `hookmux add`, agents included, can then replace its files within those capabilities, and matchers, folder globs and the phase are outside them. `hookmux promote <id> --end-standing` ends it.
 - Promote needs you. It asks you to type `y`, never takes `--yes`, and refuses when stdin is not a terminal or when it sees the environment Claude Code, Codex or Gemini CLI give the commands they run. This guards against an agent activating a plugin because of an injected instruction or by accident. It is not a sandbox: a process running as your user can still edit `~/.hookmux` directly.
 - Previews run no unreviewed code. `hookmux test` and `hookmux explain --all` skip the scripts of plugins you have not promoted unless you pass `--run-scripts`.
 - Shadow mode. A plugin added with `--shadow` (or `shadow = true`) is evaluated and logged, and adds nothing to the agent's context.

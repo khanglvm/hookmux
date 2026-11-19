@@ -22,5 +22,5 @@ export async function setDisabled(argv: string[], usage: string, disabled: boole
   writeFlags(paths.flags, { ...flags, disabled: disabled ? [...others, id] : others });
   say("ok", `${id} ${disabled ? "disabled" : "enabled"}`);
   if (disabled) return 0;
-  return syncAfterChange(paths) ? 0 : 1;
+  return (await syncAfterChange(paths)) ? 0 : 1;
 }

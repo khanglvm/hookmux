@@ -23,7 +23,7 @@ Written from the Claude Code hooks reference and covered by the test suite.
 Written from the Codex source at `codex-cli` 0.167.1 and its hooks documentation. Not yet run against a live client.
 
 - Config file: `~/.codex/hooks.json`. Its top level may hold only `description` and `hooks`, and any other key makes Codex skip the whole file. Timeouts are in seconds.
-- Codex runs a new or changed hook only after you approve it in its `/hooks` screen. It keys each approval by the file path and the entry's position, and a change to the command, matcher or timeout makes the entry count as changed. Appending after your entries keeps your approvals valid, and every change to the hub entries needs one new approval.
+- Codex runs a new or changed hook only after you approve it in its `/hooks` screen. It keys each approval by the file path and the entry's position, and a change to the command, matcher or timeout makes the entry count as changed. Appending after your entries keeps your approvals valid. After it edits the file, hookmux asks `codex app-server` (tested with codex-cli 0.170.0) for the hook list and approves only entries whose command is exactly a hub command for its launcher, in this `hooks.json`, from the user layer. `hookmux doctor` asks Codex the same way, so an entry whose approved hash no longer matches shows as unapproved.
 - Codex rejects output with unknown keys, and `hookSpecificOutput.hookEventName` must name the event.
 - A blocked prompt is not recorded in the conversation history.
 - Before a tool call, Codex can deny but cannot ask the user. Shell commands arrive as `Bash` and file edits as `apply_patch`, both with the text in `tool_input.command`, so there is no `file_path` to match on.

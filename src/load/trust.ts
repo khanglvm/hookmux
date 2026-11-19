@@ -17,6 +17,21 @@ export interface TrustEntry {
   hash: string;
   capabilities: string[];
   promotedAt: string;
+  /** "standing" when `hookmux add` pinned this content under a standing approval. */
+  via?: "promote" | "standing";
+  standing?: StandingApproval;
+}
+
+/**
+ * Granted by a person through `hookmux promote <id> --standing`: a later
+ * `hookmux add` of this plugin is pinned without asking while its capabilities
+ * stay within this ceiling. Security: anyone who can run `hookmux add --force`
+ * can then replace the plugin's files within the ceiling; the ceiling does not
+ * cover matchers, globs or the phase.
+ */
+export interface StandingApproval {
+  capabilities: string[];
+  grantedAt: string;
 }
 
 export interface TrustStore {
@@ -128,9 +143,27 @@ export function capabilitiesOf(spec: PluginSpec, variants: PluginSpec[] = []): s
   return [...caps].sort();
 }
 
+const EVIDENCE_CAP = /^evidence_chars:(\d+)$/;
+
+/** True when `approved` covers `capability`; an approved evidence_chars limit covers any lower one. */
+function covers(approved: string[], capability: string): boolean {
+  if (approved.includes(capability)) return true;
+  const wanted = EVIDENCE_CAP.exec(capability);
+  if (!wanted) return false;
+  return approved.some((a) => {
+    const granted = EVIDENCE_CAP.exec(a);
+    return granted !== null && Number(granted[1]) >= Number(wanted[1]);
+  });
+}
+
+/** Capabilities in `effective` that `approved` does not cover. */
+export function uncoveredCapabilities(effective: string[], approved: string[]): string[] {
+  return effective.filter((c) => !covers(approved, c));
+}
+
 /** True when every capability in `effective` was approved at promote time. */
 export function isCapabilitySubset(effective: string[], approved: string[]): boolean {
-  return effective.every((c) => approved.includes(c));
+  return uncoveredCapabilities(effective, approved).length === 0;
 }
 
 /** Inject/notify-only plugins without scripts can be auto-trusted when the user allows it. */

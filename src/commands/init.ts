@@ -18,7 +18,7 @@ import { saveRegistry } from "../load/snapshot.ts";
 import { homePaths } from "../runtime/paths.ts";
 import { VERSION } from "../version.ts";
 import { parseCommand, positiveInt, UsageError } from "./lib/args.ts";
-import { allAdapters, installHub, neededEvents, printHostResults, wiredAdapters } from "./lib/hosts.ts";
+import { allAdapters, approveHubs, installHub, neededEvents, printHostResults, wiredAdapters } from "./lib/hosts.ts";
 import { say } from "./lib/output.ts";
 import { loadDefaults } from "./lib/plugins.ts";
 import { confirm, isInteractive } from "./lib/prompt.ts";
@@ -71,7 +71,9 @@ export async function run(argv: string[]): Promise<number> {
   const registry = compileRegistry(paths);
   saveRegistry(paths, registry);
   const events = neededEvents(registry);
-  const hostsOk = printHostResults(adapters.map((a) => installHub(a, paths, events)));
+  const hostResults = adapters.map((a) => installHub(a, paths, events));
+  const printed = printHostResults(hostResults);
+  const hostsOk = (await approveHubs(paths, hostResults)) && printed;
 
   if (!v["no-skill"] && (await offer("Install the hookmux authoring skill for these hosts?"))) {
     printSkill(layout.skill, adapters);
