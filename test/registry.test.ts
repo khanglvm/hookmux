@@ -4,12 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import "../src/checks/index.ts";
+import type { PluginSpec } from "../src/core/types.ts";
 import { ADAPTERS } from "../src/hosts/index.ts";
 import { writeFlags } from "../src/load/flags.ts";
 import { compileManifest } from "../src/load/manifest.ts";
 import { compileRegistry } from "../src/load/registry.ts";
 import { KNOWN_HOSTS } from "../src/load/snapshot.ts";
-import { writeTrust } from "../src/load/trust.ts";
+import { capabilitiesOf, writeTrust } from "../src/load/trust.ts";
 import { homePaths } from "../src/runtime/paths.ts";
 
 const EXAMPLES = new URL("../examples/", import.meta.url).pathname;
@@ -127,4 +128,13 @@ test('on_error = "block" is rejected and "open" changes nothing', () => {
   );
   const open = compileManifest({ ...base, on_error: "open" }, dir, undefined, defaults).base;
   assert.deepEqual(open, compileManifest(base, dir, undefined, defaults).base);
+});
+
+test("each variable a script passes through is a capability of its own", () => {
+  const spec = {
+    events: ["tool.after"],
+    effects: [{ effect: "inject" }],
+    checks: { role: { kind: "script", command: "x.py", env: ["T3CODE_THREAD_ID"] } },
+  } as unknown as PluginSpec;
+  assert.deepEqual(capabilitiesOf(spec), ["env:T3CODE_THREAD_ID", "event:tool.after", "inject", "script"]);
 });

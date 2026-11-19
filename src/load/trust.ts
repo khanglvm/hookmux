@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { getCheck } from "../checks/registry.ts";
+import { declaredEnv } from "../checks/script.ts";
 import type { PluginSpec } from "../core/types.ts";
 import { readJson, writeFileAtomic } from "../runtime/fsutil.ts";
 
@@ -116,6 +117,8 @@ export function capabilitiesOf(spec: PluginSpec, variants: PluginSpec[] = []): s
     for (const c of Object.values(s.checks)) {
       const kind = getCheck(c.kind);
       if (kind?.tier === 1) caps.add("script");
+      // A passed-through variable can carry a secret, so each one is approved on its own.
+      for (const name of declaredEnv(c)) caps.add(`env:${name}`);
       if (kind?.modelBacked) caps.add("model");
     }
   }

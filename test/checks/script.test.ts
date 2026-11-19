@@ -259,3 +259,33 @@ test("validation rejects escapes, bad args and out-of-range timeouts", () => {
   assert.match(problems({ command: "x.sh", timeout_ms: 10_001 }).join(), /timeout_ms/);
   assert.match(problems({ command: "x.sh", output: "text" }).join(), /output/);
 });
+
+test("a script sees the variables it declares in env, and no others", async () => {
+  process.env.WANTED_ID = "thread-1";
+  process.env.SECRET_TOKEN = "do-not-leak";
+  try {
+    const f = fixture({ "env.sh": sh(`printf '{"value": true, "evidence": "%s/%s"}' "$WANTED_ID" "$SECRET_TOKEN"`) });
+    const r = await f.run({ command: "env.sh", env: ["WANTED_ID", "UNSET_NAME"] });
+    assert.equal(r.evidence, "thread-1/");
+  } finally {
+    delete process.env.WANTED_ID;
+    delete process.env.SECRET_TOKEN;
+  }
+});
+
+test("evidence_chars lets a script keep longer evidence for its templates", async () => {
+  const long = "x".repeat(500);
+  const f = fixture({ "long.sh": sh(`echo '{"value": true, "evidence": "${long}"}'`) });
+  assert.equal((await f.run({ command: "long.sh", evidence_chars: 4000 })).evidence, long);
+  assert.equal((await f.run({ command: "long.sh" })).evidence?.length, 80);
+});
+
+test("validation rejects bad env names, HOOKMUX_ names and out-of-range evidence_chars", () => {
+  const problems = (options: Omit<CheckSpec, "kind">) => script.validate({ kind: "script", ...options });
+  assert.deepEqual(problems({ command: "x.sh", env: ["T3CODE_THREAD_ID"], evidence_chars: 4000 }), []);
+  assert.match(problems({ command: "x.sh", env: "A" }).join(), /env/);
+  assert.match(problems({ command: "x.sh", env: ["A-B"] }).join(), /not valid/);
+  assert.match(problems({ command: "x.sh", env: ["HOOKMUX_HOST"] }).join(), /HOOKMUX_/);
+  assert.match(problems({ command: "x.sh", evidence_chars: 0 }).join(), /evidence_chars/);
+  assert.match(problems({ command: "x.sh", evidence_chars: 4001 }).join(), /evidence_chars/);
+});

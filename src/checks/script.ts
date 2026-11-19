@@ -18,6 +18,13 @@ const DEFAULT_TIMEOUT_MS = 1000;
 const MAX_TIMEOUT_MS = 10_000;
 /** The only parent variables a script sees, so tokens and keys in the hook's environment stay out. */
 const ENV_PASSTHROUGH = ["PATH", "HOME", "LANG", "LC_ALL", "TMPDIR"] as const;
+/** Names a plugin may add with `env`. HOOKMUX_* stays ours so a plugin cannot spoof its own context. */
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const RESERVED_ENV_PREFIX = "HOOKMUX_";
+const MAX_ENV_NAMES = 32;
+/** Pattern evidence stays at the shared default; a promoted script may opt in to up to the effect text limit. */
+const DEFAULT_EVIDENCE_CHARS = 80;
+const MAX_EVIDENCE_CHARS = 4000;
 
 type ScriptOutput = "bool" | "score";
 
@@ -49,7 +56,33 @@ function optionProblems(spec: CheckSpec): string[] {
   if (spec.output !== undefined && spec.output !== "bool" && spec.output !== "score") {
     problems.push("output must be 'bool' or 'score'");
   }
+  problems.push(...envProblems(spec.env));
+  const chars = spec.evidence_chars;
+  if (
+    chars !== undefined &&
+    (!Number.isInteger(chars) || (chars as number) < 1 || (chars as number) > MAX_EVIDENCE_CHARS)
+  ) {
+    problems.push(`evidence_chars must be a whole number from 1 to ${MAX_EVIDENCE_CHARS}`);
+  }
   return problems;
+}
+
+function envProblems(env: unknown): string[] {
+  if (env === undefined) return [];
+  if (!Array.isArray(env) || env.length > MAX_ENV_NAMES) {
+    return [`env must be a list of at most ${MAX_ENV_NAMES} variable names`];
+  }
+  return env.flatMap((name) => {
+    if (typeof name !== "string" || !ENV_NAME.test(name)) return [`env name ${JSON.stringify(name)} is not valid`];
+    if (name.startsWith(RESERVED_ENV_PREFIX))
+      return [`env may not pass ${name}: ${RESERVED_ENV_PREFIX}* is set by hookmux`];
+    return [];
+  });
+}
+
+/** The extra variables a script check asks for, as declared; validation has already checked each name. */
+export function declaredEnv(spec: CheckSpec): string[] {
+  return Array.isArray(spec.env) ? spec.env.filter((n): n is string => typeof n === "string") : [];
 }
 
 /**
@@ -100,9 +133,9 @@ function stdinPayload(spec: CheckSpec, ctx: CheckContext): string {
   });
 }
 
-function scriptEnv(ctx: CheckContext): Record<string, string> {
+function scriptEnv(spec: CheckSpec, ctx: CheckContext): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const key of ENV_PASSTHROUGH) {
+  for (const key of [...ENV_PASSTHROUGH, ...declaredEnv(spec)]) {
     const value = process.env[key];
     if (value !== undefined) env[key] = value;
   }
@@ -127,7 +160,7 @@ function withStderr(reason: string, stderr: string): string {
 }
 
 /** Reads `{"value": ..., "evidence"?: ...}`. The value must match the declared output. */
-export function parseScriptOutput(text: string, output: ScriptOutput): Signal {
+export function parseScriptOutput(text: string, output: ScriptOutput, evidenceChars = DEFAULT_EVIDENCE_CHARS): Signal {
   let data: unknown;
   try {
     data = JSON.parse(text);
@@ -137,7 +170,7 @@ export function parseScriptOutput(text: string, output: ScriptOutput): Signal {
   if (data === null || typeof data !== "object" || !("value" in data))
     return unknown("script JSON needs a value field");
   const { value, evidence } = data as { value: unknown; evidence?: unknown };
-  const extra = typeof evidence === "string" ? { evidence: clip(evidence) } : {};
+  const extra = typeof evidence === "string" ? { evidence: clip(evidence, evidenceChars) } : {};
   if (value === null) return { value: null, ...extra };
   if (output === "bool") {
     return typeof value === "boolean" ? { value, ...extra } : unknown("bool script must return true, false or null");
@@ -150,13 +183,17 @@ export function parseScriptOutput(text: string, output: ScriptOutput): Signal {
  * Exit 0 or 1 with JSON on stdout uses the JSON. Empty stdout reads the exit
  * code (0 true, 1 false) for bool scripts; a score script must print its score.
  */
-export function interpretResult(result: ProcessResult, output: ScriptOutput): Signal {
+export function interpretResult(
+  result: ProcessResult,
+  output: ScriptOutput,
+  evidenceChars = DEFAULT_EVIDENCE_CHARS,
+): Signal {
   if (result.failure) return unknown(withStderr(result.failure, result.stderr));
   if (result.exitCode !== 0 && result.exitCode !== 1) {
     return unknown(withStderr(`script exited with ${result.exitCode}`, result.stderr));
   }
   const text = result.stdout.trim();
-  if (text !== "") return parseScriptOutput(text, output);
+  if (text !== "") return parseScriptOutput(text, output, evidenceChars);
   if (output === "score") return unknown("score script printed nothing");
   return { value: result.exitCode === 0 };
 }
@@ -172,6 +209,8 @@ registerCheck({
     timeout_ms: `default ${DEFAULT_TIMEOUT_MS}, at most ${MAX_TIMEOUT_MS}`,
     needs_raw: "default false; true also sends the host's original payload",
     output: `"bool" (default) or "score"`,
+    env: `extra environment variable names passed through when set (at most ${MAX_ENV_NAMES}, no HOOKMUX_*); each is a capability that promote approves`,
+    evidence_chars: `characters of the script's evidence kept for templates; default ${DEFAULT_EVIDENCE_CHARS}, at most ${MAX_EVIDENCE_CHARS}`,
   },
   tier: 1,
   // The kind's output is static, so `when` validation treats every script as bool
@@ -190,11 +229,15 @@ registerCheck({
       file: script.file,
       args: (spec.args as string[] | undefined) ?? [],
       cwd: scriptCwd(ctx),
-      env: scriptEnv(ctx),
+      env: scriptEnv(spec, ctx),
       stdin: stdinPayload(spec, ctx),
       budgetMs,
       signal: ctx.signal,
     });
-    return interpretResult(result, spec.output === "score" ? "score" : "bool");
+    return interpretResult(
+      result,
+      spec.output === "score" ? "score" : "bool",
+      (spec.evidence_chars as number | undefined) ?? DEFAULT_EVIDENCE_CHARS,
+    );
   },
 });
