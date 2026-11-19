@@ -5,6 +5,7 @@
 // compileRegistry needs every check kind registered first.
 import "../../checks/index.ts";
 import { CANONICAL_EVENTS, type CanonicalEvent } from "../../core/types.ts";
+import { CodexUnavailableError } from "../../hosts/codex-trust.ts";
 import { ADAPTERS } from "../../hosts/index.ts";
 import type { ConfigChange, HostAdapter } from "../../hosts/types.ts";
 import { readInstallState } from "../../install/records.ts";
@@ -111,7 +112,8 @@ export async function approveHubs(paths: HomePaths, results: HostResult[]): Prom
         say("warn", `${adapter.name}: ${r.stillUntrusted.length} hub entries still need approval`, APPROVE_BY_HAND);
       } else if (r.approved.length > 0) say("ok", `${adapter.name}: approved ${r.approved.length} hub entries`);
     } catch (error) {
-      ok = false;
+      // A machine with a Codex folder but no codex on PATH has nothing to approve with; that is not a failed change.
+      if (!(error instanceof CodexUnavailableError)) ok = false;
       say("warn", `${adapter.name}: could not approve hub entries (${(error as Error).message})`, APPROVE_BY_HAND);
     }
   }

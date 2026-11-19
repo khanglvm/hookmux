@@ -29,7 +29,10 @@ function hooks() {
         const trustStatus = pinned === undefined ? "untrusted" : pinned === currentHash ? "trusted" : "modified";
         return {
           key,
+          handlerType: handler.type ?? "command",
           command: handler.command ?? null,
+          async: handler.async === true,
+          matcher: group.matcher ?? null,
           sourcePath: hooksFile,
           source: "user",
           isManaged: false,

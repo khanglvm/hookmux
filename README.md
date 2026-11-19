@@ -86,7 +86,7 @@ Effects each client supports per event:
 | Gemini CLI  | inject, block, notify | inject, notify  | block, notify         | inject, block, notify |
 <!-- hosts:end -->
 
-Notes on each client, including the Codex and Gemini CLI adapters, are in [docs/hosts.md](docs/hosts.md). Codex runs a new or changed hook entry only once it is approved. `init` and `sync` approve hookmux's own hub entries through `codex app-server` and leave every other hook as it was; if that fails, approve them in Codex's `/hooks` screen.
+Notes on each client, including the Codex and Gemini CLI adapters, are in [docs/hosts.md](docs/hosts.md). Codex runs a new or changed hook entry only once it is approved. `init`, `sync` and every command that changes a plugin approve hookmux's own hub entries through `codex app-server` and leave every other hook as it was; if that fails, approve them in Codex's `/hooks` screen.
 
 ## Commands
 

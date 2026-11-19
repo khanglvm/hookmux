@@ -143,6 +143,7 @@ test("a failed Codex approval is reported with the /hooks step", async () => {
   sb.env.HOOKMUX_CODEX = join(sb.dir, "missing-codex");
   delete sb.env.FAKE_CODEX_FAIL;
   const missing = await cli(sb, "sync");
+  assert.equal(missing.code, 0, "a machine without codex is not a failed sync");
   assert.match(missing.stdout, /could not approve hub entries \(could not start codex app-server/);
 });
 
@@ -203,4 +204,17 @@ test("a hub entry in the older double-quoted form is left for /hooks, and counts
   const again = await cli(sb, "sync");
   assert.equal(again.code, 0, again.stdout + again.stderr);
   assert.match((await cli(sb, "doctor")).stdout, /Codex: 2 hub entries approved/);
+});
+
+test("a hub entry edited to run async or under a matcher is not approved", async () => {
+  const sb = sandbox();
+  assert.equal((await initCodex(sb)).code, 0);
+  const table = JSON.parse(readFileSync(codexHooks(sb), "utf8"));
+  table.hooks.UserPromptSubmit[0].matcher = "never";
+  table.hooks.SessionStart[0].hooks[0].async = true;
+  writeFileSync(codexHooks(sb), JSON.stringify(table));
+  const before = fakeTrust(sb);
+  const r = await cli(sb, "sync");
+  assert.match(r.stdout, /hub entries still need approval/);
+  assert.deepEqual(fakeTrust(sb), before);
 });

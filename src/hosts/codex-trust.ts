@@ -27,7 +27,10 @@ const KILL_GRACE_MS = 2_000;
 /** The HookMetadata fields this module reads. */
 export interface CodexHook {
   key: string;
+  handlerType: string;
   command: string | null;
+  async: boolean;
+  matcher: string | null;
   sourcePath: string;
   source: string;
   isManaged: boolean;
@@ -82,10 +85,22 @@ export function hubEntries(hooks: CodexHook[], target: HubScope): HubListing {
   return { entries, missing: target.events.filter((e) => !seen.has(e)) };
 }
 
-/** True when the entry's command is exactly what hookmux writes today, the only form approved here. */
-function isCurrentHubCommand(hook: CodexHook, launcher: string): boolean {
-  return CANONICAL_EVENTS.some((e) => hook.command === hubCommand(launcher, "codex", e));
+/**
+ * True when the entry is exactly what hookmux writes today, the only form approved here.
+ * Security: an entry edited to run async or under a matcher no longer guards every call,
+ * so it is left for the person to look at in /hooks.
+ */
+function isCurrentHubEntry(hook: CodexHook, launcher: string): boolean {
+  return (
+    hook.handlerType === "command" &&
+    hook.async === false &&
+    hook.matcher === null &&
+    CANONICAL_EVENTS.some((e) => hook.command === hubCommand(launcher, "codex", e))
+  );
 }
+
+/** Codex could not be started at all, so there is nothing to approve with; not a failed approval. */
+export class CodexUnavailableError extends Error {}
 
 /**
  * Codex reports sourcePath under the realpath of CODEX_HOME (codex-cli 0.170.0),
@@ -109,7 +124,7 @@ export async function approveHubEntries(target: ApprovalTarget): Promise<Approva
   return withAppServer(target, async (call) => {
     const { entries: listed, missing } = hubEntries(await listHooks(call), target);
     const untrusted = listed.filter(needsApproval);
-    const pending = untrusted.filter((h) => isCurrentHubCommand(h, target.launcher));
+    const pending = untrusted.filter((h) => isCurrentHubEntry(h, target.launcher));
     if (pending.length === 0) {
       const stillUntrusted = untrusted.map((h) => h.key);
       return { approved: [], alreadyTrusted: listed.length - untrusted.length, stillUntrusted, missing };
@@ -166,7 +181,9 @@ async function withAppServer<T>(target: ApprovalTarget, body: (call: Call) => Pr
     for (const w of waiting.values()) w.reject(failure);
     waiting.clear();
   };
-  child.on("error", (error) => failAll(new Error(`could not start codex app-server: ${error.message}`)));
+  child.on("error", (error) =>
+    failAll(new CodexUnavailableError(`could not start codex app-server: ${error.message}`)),
+  );
   child.on("exit", (code) => failAll(new Error(`codex app-server exited (${code ?? "signal"})`)));
   child.stdin.on("error", (error) => failAll(new Error(`codex app-server closed its input: ${error.message}`)));
   createInterface({ input: child.stdout }).on("line", (line) => {
