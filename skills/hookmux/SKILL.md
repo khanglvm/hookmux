@@ -7,6 +7,8 @@ description: Builds hookmux plugins, which make Claude Code, Codex or Gemini CLI
 
 The user wants an automatic behaviour. You build it as a hookmux plugin, test it, install it in shadow mode, and hand the user the one command that makes it live. You stage; the user approves.
 
+The full documentation is one text file at https://docs.khangle.dev/hookmux/llms-full.txt.
+
 `hookmux schema --json` is the live reference for what the installed engine accepts. When it disagrees with this skill or its references, follow the engine. Each command's `--help` gives its exact arguments.
 
 References, loaded when a step names them:

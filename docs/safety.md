@@ -1,0 +1,12 @@
+# Safety and approvals
+
+A hook runs on every prompt or tool call, so hookmux is built to fail quietly, to run only code you approved, and to keep what it records to a minimum. This page lists what it guarantees and where the limits are.
+
+- A broken hook never breaks your agent. If Node or hookmux is missing, fails, hangs or runs past its time limit, the hook prints nothing and exits 0, which every agent reads as "no opinion". A check that errors or times out counts as unknown and never blocks. Because a guard that stops running also stops blocking, each session start shows you a notice naming any guard plugin that is waiting for approval or does not load.
+- Approvals are pinned to the files. `promote` records a SHA-256 hash of the plugin folder and the capabilities it has. If a file changes afterwards, whether by you, an agent or an update, the plugin stops running until you approve it again. A plugin you change often can get a standing approval (`hookmux promote <id> --standing`): later `hookmux add` updates go live without asking while they need no new capability. Anyone who can run `hookmux add`, agents included, can then replace its files within those capabilities. `hookmux promote <id> --end-standing` ends it.
+- Approval needs you. `promote` asks you to type `y`, has no `--yes` flag, and refuses when stdin is not a terminal or when it sees the environment an agent gives the commands it runs. In Claude Code, an agent that runs `hookmux promote <id>` gets Claude Code's own permission prompt, and approving that prompt turns the plugin on. This stops an agent from turning on a plugin because of an injected instruction or by accident. It is not a sandbox: a process running as your user can still edit `~/.hookmux` directly.
+- Previews run no unapproved code. `hookmux test` and `hookmux explain --all` skip the scripts of plugins you have not approved unless you pass `--run-scripts`.
+- Shadow mode lets you try a plugin safely. A plugin added with `--shadow` (or `shadow = true`) runs and is logged, but adds nothing to what the agent sees.
+- Blocks need a rule. By default a block needs a check that is not model-backed to agree, so a model's misreading cannot discard your prompt.
+- No telemetry. hookmux collects no usage data.
+- Private logs. The decision log is off until you run `hookmux log on`. It keeps a short hash and the length of each prompt, and stores prompt text only when you also pass `--prompts`. It rotates at 1 MiB and keeps one previous file.

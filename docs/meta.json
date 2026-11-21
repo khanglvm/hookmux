@@ -1,0 +1,19 @@
+{
+  "pages": [
+    "index",
+    "install",
+    "quickstart",
+    "---Guides---",
+    "how-plugins-decide",
+    "plugin-sources",
+    "testing",
+    "hosts",
+    "safety",
+    "troubleshooting",
+    "---Reference---",
+    "cli",
+    "plugins",
+    "---For agents---",
+    "agents"
+  ]
+}

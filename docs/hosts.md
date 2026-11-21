@@ -1,6 +1,21 @@
-# Host notes
+# Supported agents
 
-Each agent client has one adapter module in `src/hosts/`. It turns the client's hook payload into a hookmux event, renders the result in the client's output format, and edits the client's hook config. Plugins never see these formats. The README table, generated from the adapters, lists the effects each client supports on each event, and `hookmux schema --json` also gives the native event names. This page covers the behaviour those tables leave out.
+hookmux works with eight coding agents. Each has an adapter in `src/hosts/` that turns the agent's hook payload into a hookmux event, renders the result in the agent's output format, and edits the agent's hook config.
+
+Plugins never see these formats. This page covers the behaviour that differs between agents: where each keeps its config, how its events map, what it can and cannot do, and how well each adapter has been tested. `hookmux schema --json` prints the effects each agent supports on each event and the native event names, and the [effects reference](../skills/hookmux/references/effects.md) shows them as a table.
+
+| Agent          | Id            | Config file hookmux edits                  |
+| -------------- | ------------- | ------------------------------------------ |
+| Claude Code    | `claude-code` | `~/.claude/settings.json`                  |
+| Codex          | `codex`       | `~/.codex/hooks.json`                      |
+| Gemini CLI     | `gemini-cli`  | `~/.gemini/settings.json`                  |
+| Qwen Code      | `qwen-code`   | `~/.qwen/settings.json`                    |
+| Factory Droid  | `droid`       | `~/.factory/hooks.json` or `settings.json` |
+| Qoder CLI      | `qoder`       | `~/.qoder/settings.json`                   |
+| CodeBuddy Code | `codebuddy`   | `~/.codebuddy/settings.json`               |
+| opencode       | `opencode`    | `~/.config/opencode/plugins/hookmux.js`    |
+
+Some agents move their config folder with an environment variable, and the section for each agent says which. Each section also says what the adapter was written from and whether it was run against the real client.
 
 ## Feature matrix
 
@@ -126,7 +141,7 @@ Written from the Claude Code hooks reference and covered by the test suite.
 
 ## Codex (`codex`)
 
-Written from the Codex source at `codex-cli` 0.167.1 and its hooks documentation. Not yet run against a live client.
+Written from the Codex source at `codex-cli` 0.167.1 and its hooks documentation. Run live on 0.167.1: adding context and blocking a prompt both work.
 
 - Config file: `~/.codex/hooks.json`. Its top level may hold only `description` and `hooks`, and any other key makes Codex skip the whole file. Timeouts are in seconds.
 - Codex runs a new or changed hook only after you approve it in its `/hooks` screen. It keys each approval by the file path and the entry's position, and a change to the command, matcher or timeout makes the entry count as changed. Appending after your entries keeps your approvals valid. After it edits the file, hookmux asks `codex app-server` (tested with codex-cli 0.170.0) for the hook list and approves only entries whose command is exactly a hub command for its launcher, in this `hooks.json`, from the user layer. `hookmux doctor` asks Codex the same way, so an entry whose approved hash no longer matches shows as unapproved.

@@ -34,3 +34,14 @@ Canonical events: `prompt.submit`, `session.start`, `tool.before`, `tool.after`.
 - Commit subjects follow Conventional Commits; release-please cuts releases from them.
 - Each adapter cites the client source or docs it was written against (version and file:line). Keep that habit for new adapters, and say in `docs/hosts.md` whether it was run against the real client.
 - A CodeGraph index lives in `.codegraph/` (git-ignored). Query it for symbols, callers and change impact before broad searches, e.g. `codegraph explore "<area or symbol>"`, `codegraph callers <symbol>` or `codegraph impact <symbol>`. In a fresh clone, build it with `codegraph init -y` (needs the `codegraph` CLI); without it, search with `rg`.
+
+## Docs
+
+`docs/` is the source of truth for hookmux's documentation. docs.khangle.dev publishes the pages `docs/meta.json` lists, and its llms.txt is built from the same pages for coding agents. `docs/design.md` is internal and stays unlisted. The contract is in https://github.com/khanglvm/docs/blob/main/docs/CONTRACT.md.
+
+- When a change adds, removes or changes a command, flag, option, config key, manifest key, output format or default, update the docs page that covers it in the same commit: `docs/cli.md` for commands, `docs/plugins.md` for `plugin.toml`, `docs/hosts.md` for an agent. Add a page and list it in `docs/meta.json` when none covers it. The authoring skill in `skills/hookmux/` must stay consistent with the pages.
+- Keep `docs/agents.md` exact: commands, flags, output shapes and limits, written for a coding agent.
+- README sections between `<!-- docs:begin PAGE -->` and `<!-- docs:end -->` are generated. Edit the page in `docs/`, then run `node scripts/docs-readme.mjs`.
+- Run `node scripts/docs-readme.mjs --check` before committing. CI runs the same check.
+- Do not move or rename a published page without updating `docs/meta.json` and links to it.
+- Each page opens with an H1 and a one or two sentence summary, which the site uses as its description. Use plain ASCII punctuation (no em dashes) and no raw HTML.
