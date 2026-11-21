@@ -15,6 +15,17 @@ Context limit: 10000 characters.
 | `tool.before`   | `PreToolUse`       | inject, block, notify |
 | `tool.after`    | `PostToolUse`      | inject, block, notify |
 
+## CodeBuddy Code (`codebuddy`)
+
+Context limit: 10000 characters.
+
+| Canonical event | Native event       | Effects               |
+| --------------- | ------------------ | --------------------- |
+| `prompt.submit` | `UserPromptSubmit` | inject, block, notify |
+| `session.start` | `SessionStart`     | inject, notify        |
+| `tool.before`   | `PreToolUse`       | inject, block, notify |
+| `tool.after`    | `PostToolUse`      | inject, notify        |
+
 ## Codex (`codex`)
 
 Context limit: 10000 characters.
@@ -24,6 +35,17 @@ Context limit: 10000 characters.
 | `prompt.submit` | `UserPromptSubmit` | inject, block, notify |
 | `session.start` | `SessionStart`     | inject, notify        |
 | `tool.before`   | `PreToolUse`       | inject, block, notify |
+| `tool.after`    | `PostToolUse`      | inject, block, notify |
+
+## Factory Droid (`droid`)
+
+Context limit: 10000 characters.
+
+| Canonical event | Native event       | Effects               |
+| --------------- | ------------------ | --------------------- |
+| `prompt.submit` | `UserPromptSubmit` | inject, block, notify |
+| `session.start` | `SessionStart`     | inject, notify        |
+| `tool.before`   | `PreToolUse`       | block, notify         |
 | `tool.after`    | `PostToolUse`      | inject, block, notify |
 
 ## Gemini CLI (`gemini-cli`)
@@ -36,3 +58,25 @@ Context limit: 10000 characters.
 | `session.start` | `SessionStart` | inject, notify        |
 | `tool.before`   | `BeforeTool`   | block, notify         |
 | `tool.after`    | `AfterTool`    | inject, block, notify |
+
+## Qoder CLI (`qoder`)
+
+Context limit: 10000 characters.
+
+| Canonical event | Native event       | Effects               |
+| --------------- | ------------------ | --------------------- |
+| `prompt.submit` | `UserPromptSubmit` | inject, block, notify |
+| `session.start` | `SessionStart`     | inject, notify        |
+| `tool.before`   | `PreToolUse`       | inject, block, notify |
+| `tool.after`    | `PostToolUse`      | inject, notify        |
+
+## Qwen Code (`qwen-code`)
+
+Context limit: 10000 characters.
+
+| Canonical event | Native event       | Effects               |
+| --------------- | ------------------ | --------------------- |
+| `prompt.submit` | `UserPromptSubmit` | inject, block, notify |
+| `session.start` | `SessionStart`     | inject, notify        |
+| `tool.before`   | `PreToolUse`       | inject, block, notify |
+| `tool.after`    | `PostToolUse`      | inject, block, notify |

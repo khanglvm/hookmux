@@ -12,8 +12,12 @@ A plugin lists its effects as `[[then]]` tables with an `effect` key.
 
 ## Support per host and event
 
-| Host        | `prompt.submit`       | `session.start` | `tool.before`         | `tool.after`          |
-| ----------- | --------------------- | --------------- | --------------------- | --------------------- |
-| Claude Code | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |
-| Codex       | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |
-| Gemini CLI  | inject, block, notify | inject, notify  | block, notify         | inject, block, notify |
+| Host           | `prompt.submit`       | `session.start` | `tool.before`         | `tool.after`          |
+| -------------- | --------------------- | --------------- | --------------------- | --------------------- |
+| Claude Code    | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |
+| CodeBuddy Code | inject, block, notify | inject, notify  | inject, block, notify | inject, notify        |
+| Codex          | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |
+| Factory Droid  | inject, block, notify | inject, notify  | block, notify         | inject, block, notify |
+| Gemini CLI     | inject, block, notify | inject, notify  | block, notify         | inject, block, notify |
+| Qoder CLI      | inject, block, notify | inject, notify  | inject, block, notify | inject, notify        |
+| Qwen Code      | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |

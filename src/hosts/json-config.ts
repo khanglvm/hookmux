@@ -29,6 +29,11 @@ export interface JsonHookLayout {
    * hook approval by position (Codex), so later user hooks keep their approval.
    */
   preserveGroupPositions?: boolean;
+  /**
+   * The event map is the file's root object instead of its `hooks` key, as in
+   * Factory Droid's hooks.json. Other root keys (such as `hooksDisabled`) are kept.
+   */
+  rootTable?: boolean;
 }
 
 type Json = Record<string, unknown>;
@@ -59,7 +64,8 @@ function readChecked(file: string, layout: JsonHookLayout): Json {
   return config;
 }
 
-function hookTable(config: Json): Record<string, Group[]> {
+function hookTable(config: Json, layout: JsonHookLayout): Record<string, Group[]> {
+  if (layout.rootTable) return config as Record<string, Group[]>;
   const hooks = config.hooks;
   if (hooks === undefined) return {};
   if (hooks === null || typeof hooks !== "object" || Array.isArray(hooks)) {
@@ -75,7 +81,7 @@ function groupHasHub(group: Group, launcher: string): boolean {
 export function installedEvents(file: string, launcher: string, layout: JsonHookLayout): CanonicalEvent[] {
   let hooks: Record<string, Group[]>;
   try {
-    hooks = hookTable(readChecked(file, layout));
+    hooks = hookTable(readChecked(file, layout), layout);
   } catch {
     return [];
   }
@@ -85,6 +91,15 @@ export function installedEvents(file: string, launcher: string, layout: JsonHook
       out.push(canonical);
   }
   return out;
+}
+
+/**
+ * Native event names that have an entry list in the file; empty when the file is missing.
+ * @throws ConfigEditError when the file exists but is not a config hookmux can edit.
+ */
+export function readEventNames(file: string, layout: JsonHookLayout): Set<string> {
+  const hooks = hookTable(readChecked(file, layout), layout);
+  return new Set(Object.keys(hooks).filter((name) => Array.isArray(hooks[name])));
 }
 
 function save(file: string, config: Json, change: ConfigChange): void {
@@ -99,7 +114,7 @@ function save(file: string, config: Json, change: ConfigChange): void {
 
 export function installEntries(file: string, entry: HubEntry, layout: JsonHookLayout): ConfigChange {
   const config = readChecked(file, layout);
-  const hooks = hookTable(config);
+  const hooks = hookTable(config, layout);
   const change: ConfigChange = { file, changed: false, added: [], removed: [], notes: [] };
   for (const event of entry.events) {
     const native = layout.nativeEvents[event];
@@ -117,7 +132,7 @@ export function installEntries(file: string, entry: HubEntry, layout: JsonHookLa
     change.added.push(event);
   }
   if (change.added.length > 0) {
-    config.hooks = hooks;
+    if (!layout.rootTable) config.hooks = hooks;
     save(file, config, change);
   }
   return change;
@@ -127,7 +142,7 @@ export function uninstallEntries(file: string, launcher: string, layout: JsonHoo
   const change: ConfigChange = { file, changed: false, added: [], removed: [], notes: [] };
   if (!existsSync(file)) return change;
   const config = readChecked(file, layout);
-  const hooks = hookTable(config);
+  const hooks = hookTable(config, layout);
   for (const [canonical, native] of Object.entries(layout.nativeEvents) as [CanonicalEvent, string | null][]) {
     if (!native || !Array.isArray(hooks[native])) continue;
     const groups = hooks[native];
@@ -144,8 +159,11 @@ export function uninstallEntries(file: string, launcher: string, layout: JsonHoo
     change.removed.push(canonical);
   }
   if (change.removed.length > 0) {
-    if (Object.keys(hooks).length === 0) delete config.hooks;
-    else config.hooks = hooks;
+    // A root event map was edited in place, so only a `hooks` key needs writing back.
+    if (!layout.rootTable) {
+      if (Object.keys(hooks).length === 0) delete config.hooks;
+      else config.hooks = hooks;
+    }
     save(file, config, change);
   }
   return change;

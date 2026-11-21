@@ -1,11 +1,15 @@
 {
   "name": "hookmux",
   "version": "0.1.0",
-  "description": "One hook entry for Claude Code, Codex and Gemini CLI. Plugins decide what to add to the agent's context or block.",
+  "description": "One hook entry for every coding agent: Claude Code, Codex, Gemini CLI, Qwen Code, Factory Droid, Qoder and CodeBuddy. Write a hook once as a plugin and it runs in all of them.",
   "keywords": [
     "claude-code",
     "codex",
     "gemini-cli",
+    "qwen-code",
+    "factory-droid",
+    "qoder",
+    "codebuddy",
     "hooks",
     "agents",
     "llm"

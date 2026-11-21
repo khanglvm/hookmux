@@ -11,7 +11,7 @@ import { VERSION } from "../version.ts";
 import type { HubSettings } from "./config.ts";
 
 export const REGISTRY_FORMAT = 4;
-export const KNOWN_HOSTS = ["claude-code", "codex", "gemini-cli"];
+export const KNOWN_HOSTS = ["claude-code", "codex", "gemini-cli", "qwen-code", "droid", "qoder", "codebuddy"];
 
 export interface SourceStamp {
   path: string;

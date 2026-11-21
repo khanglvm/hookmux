@@ -55,7 +55,7 @@ function helpText(): string {
   const width = Math.max(...Object.keys(COMMANDS).map((n) => n.length));
   const rows = Object.entries(COMMANDS).map(([name, c]) => `  ${name.padEnd(width)}  ${c.summary}`);
   return [
-    `hookmux ${VERSION}: one hook entry for Claude Code, Codex and Gemini CLI`,
+    `hookmux ${VERSION}: one hook entry for every coding agent`,
     "",
     "Usage: hookmux [--home <dir>] <command> [options]",
     "",

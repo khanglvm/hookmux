@@ -43,3 +43,54 @@ Written from the Gemini CLI source at v0.68.0 and its hooks documentation. Not y
 - `SessionStart` cannot block, and its added context is dropped on `/clear`. Context added before a tool call is ignored.
 - In a folder the user has not trusted, Gemini CLI turns off all hooks, including user-level ones.
 - Tool names differ from Claude Code's: `run_shell_command`, `write_file`, `replace` (edit) and `read_file`. MCP tools are named `mcp_<server>_<tool>`.
+
+## Qwen Code (`qwen-code`)
+
+Written from the Qwen Code hooks documentation at release 0.28.0 (`docs/users/features/hooks.md` in QwenLM/qwen-code). Not yet run against a live client.
+
+- Config file: `~/.qwen/settings.json`, or `settings.json` in `$QWEN_HOME` when that is set. Timeouts are in seconds.
+- Events and output keys match Claude Code's. A blocked prompt or tool result uses `decision: "block"` with a `reason`.
+- `UserPromptSubmit` also fires for tool results and other follow-up sends, where `prompt` is text bound for the model. Qwen adds `submitted_prompt` only when someone submitted the prompt, so hookmux gives a prompt without it origin `system` and route plugins skip it. Prompts typed in Vim mode, and ACP clients that do not declare a submission, also lack the field and count as `system`. Checks still read `prompt`, which holds pasted text in full.
+- Context added before a tool call is appended to that call's result. Qwen escapes `<` and `>` in added context.
+- User hooks load whatever the folder's trust. `--safe-mode`, `--bare` and `disableAllHooks` turn all hooks off.
+- Tool names: `run_shell_command`, `write_file`, `edit` and `read_file` map to `Bash`, `Write`, `Edit` and `Read`.
+
+## Factory Droid (`droid`)
+
+Written from the Factory Droid hooks reference for Droid CLI 1.16.0. Not yet run against a live client.
+
+- Droid reads user hooks from two files in `~/.factory`: `hooks.json`, keyed directly by event name, and the `hooks` key of `settings.json`. An event in `hooks.json` replaces the same event in `settings.json`. hookmux adds an event to `settings.json` only when that file already has entries for it and `hooks.json` does not, and to `hooks.json` otherwise, so its entry never hides one of yours. Timeouts are in seconds.
+- While `hooks.json` is absent Droid reads the legacy `hooks/hooks.json` instead and stops reading it once `hooks.json` exists. hookmux will not create `hooks.json` next to a legacy file: save any hook from Droid's `/hooks` screen once to migrate it, then run `hookmux sync`.
+- Droid accepts comments in these files; hookmux does not, and refuses to edit a file with comments rather than drop them.
+- If you later add hooks for an event to `settings.json` while hookmux's entry for that event sits in `hooks.json`, Droid runs only the `hooks.json` entries. Move your hook into `hooks.json` to keep both.
+- Droid documents no variable that moves `~/.factory`.
+- Context added before a tool call does not reach the model, so hookmux offers only block and notify there.
+- A blocked prompt is handed back to you unsent. A block after a tool call sends the reason to the agent; the tool has already run.
+- Hook input always carries Droid's tool names: `Execute`, `Create`, `Edit`, `Read` and `ApplyPatch`. hookmux maps `Execute` to `Bash`, `Create` to `Write` and `ApplyPatch` to `Edit`. `ApplyPatch` input has no `file_path`.
+
+## Qoder CLI (`qoder`)
+
+Written from the Qoder CLI hooks documentation for Qoder CLI 1.1.94. Not yet run against a live client.
+
+- Config file: `~/.qoder/settings.json`, or `settings.json` in `$QODER_CONFIG_DIR` when that is set. Qoder documents that variable as the user data folder; hookmux assumes settings move with it. Timeouts are in seconds.
+- A blocked prompt uses `decision: "deny"` with a `reason`.
+- Qoder cannot block after a tool call, so a block there becomes a notice.
+- Qoder rejects the whole output when `hookSpecificOutput` has no `hookEventName`; hookmux always sets it.
+- Tool names are Claude Code's (`Bash`, `Write`, `Edit`, `Read`).
+
+## CodeBuddy Code (`codebuddy`)
+
+Written from the CodeBuddy Code hooks reference for CodeBuddy Code 2.185.0, where hooks are still marked beta. Not yet run against a live client.
+
+- Config file: `~/.codebuddy/settings.json`. Timeouts are in seconds.
+- A blocked prompt uses `continue: false` with a `reason`, which only you see; CodeBuddy has deprecated `decision: "block"` there.
+- CodeBuddy cannot block after a tool call, so a block there becomes a notice.
+- Tool names are Claude Code's (`Bash`, `Write`, `Edit`, `Read`).
+
+## Agents that already run Claude Code's hooks
+
+Cursor and Devin CLI read `~/.claude/settings.json` by default, so once hookmux is set up for Claude Code they run its entries too, reporting themselves as Claude Code. hookmux has no adapter of its own for them yet, and whether each one honours every output field is untested.
+
+## Agent environment markers
+
+`hookmux promote` refuses to run when it sees the environment variables Claude Code, Codex or Gemini CLI set on the commands their agents run. The other agents here document no such variable, so for them promote relies on its terminal check alone.

@@ -19,7 +19,7 @@ export type EffectKind = "inject" | "block" | "notify";
 
 /** Read-only description of the agent client running this hook. */
 export interface HostContext {
-  /** Stable adapter id: "claude-code", "codex", "gemini-cli". */
+  /** Stable adapter id, such as "claude-code", "codex" or "gemini-cli"; src/hosts/index.ts lists them all. */
   id: string;
   name: string;
   /** Host version when the payload or environment reveals it; never guessed. */
