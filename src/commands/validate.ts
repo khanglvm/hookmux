@@ -3,11 +3,14 @@
 import "../checks/index.ts";
 import { existsSync, statSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
+import { type CompatRow, planPlugin } from "../core/compat.ts";
+import { ADAPTERS } from "../hosts/index.ts";
 import { readConfig } from "../load/config.ts";
 import { compileManifest, MANIFEST_FILE, ManifestError, readManifest } from "../load/manifest.ts";
 import { capabilitiesOf, hashPlugin, listPluginFiles } from "../load/trust.ts";
 import { homePaths } from "../runtime/paths.ts";
 import { parseCommand, UsageError } from "./lib/args.ts";
+import { compatLines } from "./lib/compat.ts";
 import { detail, printJson, say } from "./lib/output.ts";
 import { loadDefaults } from "./lib/plugins.ts";
 
@@ -23,11 +26,21 @@ export interface ValidateReport {
   problems: string[];
   warnings: string[];
   capabilities: string[];
+  /** What each effect does on each host and event the plugin reaches; see src/core/compat.ts. */
+  compat: CompatRow[];
 }
 
 /** Compiles the plugin at `dir`; never throws for plugin problems. */
 export function validatePlugin(dir: string): ValidateReport {
-  const report: ValidateReport = { ok: false, path: dir, id: null, problems: [], warnings: [], capabilities: [] };
+  const report: ValidateReport = {
+    ok: false,
+    path: dir,
+    id: null,
+    problems: [],
+    warnings: [],
+    capabilities: [],
+    compat: [],
+  };
   try {
     listPluginFiles(dir);
     hashPlugin(dir);
@@ -36,6 +49,7 @@ export function validatePlugin(dir: string): ValidateReport {
     const compiled = compileManifest(raw, dir, undefined, loadDefaults(readConfig(homePaths().config)));
     report.warnings = compiled.warnings;
     report.capabilities = capabilitiesOf(compiled.base, Object.values(compiled.variants));
+    report.compat = planPlugin(compiled, Object.values(ADAPTERS));
   } catch (error) {
     report.problems = error instanceof ManifestError ? error.problems : [(error as Error).message];
   }
@@ -56,8 +70,10 @@ export async function run(argv: string[]): Promise<number> {
     printJson(report);
     return report.ok ? 0 : 1;
   }
-  if (report.ok) say("ok", `${report.id} is valid (${report.capabilities.join(", ")})`);
-  else
+  if (report.ok) {
+    say("ok", `${report.id} is valid (${report.capabilities.join(", ")})`);
+    for (const l of compatLines(report.compat)) detail(l);
+  } else
     say(
       "fail",
       `${report.id ?? dir} has ${report.problems.length} problem(s)`,

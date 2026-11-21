@@ -10,7 +10,7 @@ TypeScript on Node 22 or later, bundled with esbuild and published to npm as `ho
 
 ## Users
 
-Developers who run one or more coding agents (Claude Code, Codex, Gemini CLI, Qwen Code, Factory Droid, Qoder CLI, CodeBuddy Code) and want the same hooks in all of them. Also hook authors who want to write a hook once instead of once per client.
+Developers who run one or more coding agents (Claude Code, Codex, Gemini CLI, Qwen Code, Factory Droid, Qoder CLI, CodeBuddy Code, opencode) and want the same hooks in all of them. Also hook authors who want to write a hook once instead of once per client.
 
 ## Product Purpose
 

@@ -1,6 +1,6 @@
 # hookmux
 
-hookmux is a hook multiplexer for coding agents. It writes one command hook per event into each agent client's own hook config (Claude Code, Codex, Gemini CLI, Qwen Code, Factory Droid, Qoder CLI, CodeBuddy Code; `src/hosts/index.ts` lists them). When the client fires that hook, hookmux reads the event JSON on stdin, runs every installed plugin, and prints one combined answer in that client's output format. A plugin is a folder with a `plugin.toml`: the events it listens to, named checks, a `when` expression over the checks, and effects (`inject` context, `block`, `notify` the user). Plugin authors never see host formats.
+hookmux is a hook multiplexer for coding agents. It writes one command hook per event into each agent client's own hook config (Claude Code, Codex, Gemini CLI, Qwen Code, Factory Droid, Qoder CLI, CodeBuddy Code, opencode; `src/hosts/index.ts` lists them). opencode has no command hooks, so hookmux installs a generated JS plugin there (`launcher/opencode-plugin.js`) that calls the same launcher. When the client fires that hook, hookmux reads the event JSON on stdin, runs every installed plugin, and prints one combined answer in that client's output format. A plugin is a folder with a `plugin.toml`: the events it listens to, named checks, a `when` expression over the checks, and effects (`inject` context, `block`, `notify` the user). Plugin authors never see host formats.
 
 ## Request path
 

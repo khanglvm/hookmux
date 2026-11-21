@@ -128,7 +128,8 @@ export function capabilitiesOf(spec: PluginSpec, variants: PluginSpec[] = []): s
   const caps = new Set<string>();
   for (const s of [spec, ...variants]) {
     for (const e of s.events) caps.add(`event:${e}`);
-    for (const e of s.effects) caps.add(e.effect);
+    // A fallback can turn a notice into context the agent reads, so each one counts as a capability.
+    for (const e of s.effects) for (const kind of [e.effect, ...(e.fallback ?? [])]) caps.add(kind);
     for (const c of Object.values(s.checks)) {
       const kind = getCheck(c.kind);
       if (kind?.tier === 1) caps.add("script");

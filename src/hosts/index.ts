@@ -5,6 +5,7 @@ import { codebuddy } from "./codebuddy.ts";
 import { codex } from "./codex.ts";
 import { droid } from "./droid.ts";
 import { geminiCli } from "./gemini-cli.ts";
+import { opencode } from "./opencode.ts";
 import { qoder } from "./qoder.ts";
 import { qwenCode } from "./qwen-code.ts";
 import type { HostAdapter } from "./types.ts";
@@ -17,6 +18,7 @@ export const ADAPTERS: Readonly<Record<string, HostAdapter>> = {
   [droid.id]: droid,
   [qoder.id]: qoder,
   [codebuddy.id]: codebuddy,
+  [opencode.id]: opencode,
 };
 
 export function getAdapter(id: string): HostAdapter | undefined {

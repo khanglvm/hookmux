@@ -10,10 +10,11 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { CanonicalEvent, EffectKind } from "../core/types.ts";
+import { cells, type FeatureTable } from "../core/features.ts";
+import { CANONICAL_EVENTS, type CanonicalEvent, type EffectKind } from "../core/types.ts";
 import { CLAUDE_EVENTS, claudeLayout, claudeStyleAdapter } from "./claude-style.ts";
 import { ConfigEditError, installEntries, installedEvents, readEventNames, uninstallEntries } from "./json-config.ts";
-import type { ConfigChange, HostConfigEditor, HubEntry } from "./types.ts";
+import type { ConfigChange, HostAdapter, HostConfigEditor, HubEntry } from "./types.ts";
 
 /**
  * PreToolUse additionalContext "does not reach the model" ("PreToolUse control").
@@ -25,6 +26,33 @@ const SUPPORTS: Record<CanonicalEvent, EffectKind[]> = {
   "session.start": ["inject", "notify"],
   "tool.before": ["block", "notify"],
   "tool.after": ["inject", "block", "notify"],
+};
+
+/**
+ * Feature facts, from the hooks reference named at the top of this file.
+ * - host.version: the documented payload has no version field.
+ * - prompt.origin: nothing in a prompt payload marks its source.
+ * - tool.file-path: ApplyPatch input has no file_path (CANONICAL_TOOLS).
+ * - block.prevents: UserPromptSubmit and PreToolUse block first; PostToolUse "block" follows the tool.
+ * - block.reason-to-agent: a PostToolUse block sends the reason to the agent ("Control by event").
+ * - block.suppress-prompt: no such key; a blocked prompt is handed back unsent.
+ * Unknown: markup and inline limits, and who sees a prompt or pre-call reason. PreToolUse cannot inject,
+ * so inject.before-call is derived.
+ */
+const HOST_FEATURES: FeatureTable = {
+  "host.version": cells(false, ...CANONICAL_EVENTS),
+  "prompt.origin": cells(false, "prompt.submit"),
+  "tool.file-path": cells(false, "tool.before", "tool.after"),
+  "inject.markup": cells(null, "prompt.submit", "session.start", "tool.after"),
+  "inject.inline": cells(null, "prompt.submit", "session.start", "tool.after"),
+  "inject.before-call": {},
+  "block.prevents": { ...cells(true, "prompt.submit", "tool.before"), ...cells(false, "tool.after") },
+  "block.reason-to-agent": { ...cells(null, "prompt.submit", "tool.before"), ...cells(true, "tool.after") },
+  "block.suppress-prompt": cells(false, "prompt.submit"),
+};
+
+const FEATURE_NOTES: HostAdapter["featureNotes"] = {
+  "tool.file-path": "ApplyPatch input has no file_path.",
 };
 
 /**
@@ -136,6 +164,8 @@ export const droid = claudeStyleAdapter({
   id: "droid",
   name: "Factory Droid",
   supports: SUPPORTS,
+  features: HOST_FEATURES,
+  featureNotes: FEATURE_NOTES,
   configDir: factoryDir,
   // UserPromptSubmit and PostToolUse read decision "block" with reason; a blocked prompt is handed back unsent.
   blockOutput: (_event, _native, reason) => ({ decision: "block", reason }),

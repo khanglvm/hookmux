@@ -5,6 +5,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { type CompatRow, isPlain, planPlugin } from "../core/compat.ts";
 import { runEngine } from "../core/engine.ts";
 import type { PluginOutcome, PluginSpec, Signal } from "../core/types.ts";
 import { ADAPTERS } from "../hosts/index.ts";
@@ -16,6 +17,7 @@ import { fileHashesOf, readPluginFiles } from "../load/trust.ts";
 import { homePaths } from "../runtime/paths.ts";
 import { parseCommand, UsageError } from "./lib/args.ts";
 import { parseCases, TESTS_FILE, type TestCase } from "./lib/cases.ts";
+import { compatLines } from "./lib/compat.ts";
 import { clip, detail, printJson, say } from "./lib/output.ts";
 import { loadDefaults } from "./lib/plugins.ts";
 import {
@@ -61,6 +63,8 @@ interface PluginReport {
   /** Set when the plugin has no tests.toml: not a failure, but nothing was tested. */
   untested?: boolean;
   cases: CaseResult[];
+  /** What the plugin's effects do on the hosts and events the cases used; see src/core/compat.ts. */
+  compat: CompatRow[];
 }
 
 /** Whether a tested plugin's scripts may run, and the hashes they are checked against. */
@@ -177,7 +181,13 @@ async function testPlugin(
 ): Promise<PluginReport> {
   const { dir, scripts } = target;
   const { settings } = ctx;
-  const report: PluginReport = { id: target.promoted?.id ?? basename(dir), path: dir, problems: [], cases: [] };
+  const report: PluginReport = {
+    id: target.promoted?.id ?? basename(dir),
+    path: dir,
+    problems: [],
+    cases: [],
+    compat: [],
+  };
   const compiled = target.promoted ?? compileFromDisk(target, ctx.defaults, report);
   if (!compiled) return report;
   const testsFile = join(dir, TESTS_FILE);
@@ -192,6 +202,8 @@ async function testPlugin(
     const withHashes = scripts.fileHashes ? { ...spec, fileHashes: scripts.fileHashes } : spec;
     report.cases.push(await runCase(i + 1, c, withHashes, { settings, preview: scripts.preview }));
   }
+  const used = new Set(report.cases.map((c) => `${c.host}/${c.event}`));
+  report.compat = planPlugin(compiled, Object.values(ADAPTERS)).filter((r) => used.has(`${r.host}/${r.event}`));
   return report;
 }
 
@@ -272,6 +284,7 @@ function printReports(reports: PluginReport[], summary: Summary, targetCount: nu
         if (c.note) detail(`note: ${c.note}`);
       }
     }
+    for (const l of compatLines(r.compat.filter((row) => !isPlain(row)))) detail(`${r.id}: ${l}`);
   }
   say(
     summary.failed > 0 ? "fail" : "ok",

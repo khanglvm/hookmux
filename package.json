@@ -1,7 +1,7 @@
 {
   "name": "hookmux",
   "version": "0.1.0",
-  "description": "One hook entry for every coding agent: Claude Code, Codex, Gemini CLI, Qwen Code, Factory Droid, Qoder and CodeBuddy. Write a hook once as a plugin and it runs in all of them.",
+  "description": "One hook entry for every coding agent: Claude Code, Codex, Gemini CLI, Qwen Code, Factory Droid, Qoder, CodeBuddy and opencode. Write a hook once as a plugin and it runs in all of them.",
   "keywords": [
     "claude-code",
     "codex",
@@ -10,6 +10,7 @@
     "factory-droid",
     "qoder",
     "codebuddy",
+    "opencode",
     "hooks",
     "agents",
     "llm"

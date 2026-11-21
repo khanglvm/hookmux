@@ -6,8 +6,10 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { CanonicalEvent, EffectKind, Origin } from "../core/types.ts";
+import { cells, type FeatureTable } from "../core/features.ts";
+import { CANONICAL_EVENTS, type CanonicalEvent, type EffectKind, type Origin } from "../core/types.ts";
 import { claudeStyleAdapter } from "./claude-style.ts";
+import type { HostAdapter } from "./types.ts";
 
 /**
  * PreToolUse additionalContext is appended to that call's tool result, and PostToolUse
@@ -19,6 +21,34 @@ const SUPPORTS: Record<CanonicalEvent, EffectKind[]> = {
   "session.start": ["inject", "notify"],
   "tool.before": ["inject", "block", "notify"],
   "tool.after": ["inject", "block", "notify"],
+};
+
+/**
+ * Feature facts, from hooks.md and tool-names.ts at the release named at the top of this file.
+ * - host.version: the documented payload has no version field.
+ * - prompt.origin: submitted_prompt marks a real submission (see originOf).
+ * - tool.file-path: write_file and edit take file_path (CANONICAL_TOOLS).
+ * - inject.markup: < and > in added context are escaped (hooks.md).
+ * - inject.before-call: PreToolUse additionalContext is appended to the tool result, not shown first.
+ * - block.prevents: UserPromptSubmit and PreToolUse block first; PostToolUse "block" follows the tool.
+ * - block.suppress-prompt: no such key in the hook output.
+ * Unknown: inline limits and who sees a block reason.
+ */
+const HOST_FEATURES: FeatureTable = {
+  "host.version": cells(false, ...CANONICAL_EVENTS),
+  "prompt.origin": cells(true, "prompt.submit"),
+  "tool.file-path": cells(true, "tool.before", "tool.after"),
+  "inject.markup": cells(false, ...CANONICAL_EVENTS),
+  "inject.inline": cells(null, ...CANONICAL_EVENTS),
+  "inject.before-call": cells(false, "tool.before"),
+  "block.prevents": { ...cells(true, "prompt.submit", "tool.before"), ...cells(false, "tool.after") },
+  "block.reason-to-agent": cells(null, "prompt.submit", "tool.before", "tool.after"),
+  "block.suppress-prompt": cells(false, "prompt.submit"),
+};
+
+const FEATURE_NOTES: HostAdapter["featureNotes"] = {
+  "inject.before-call": "Context added before a tool call is appended to that call's result.",
+  "inject.markup": "< and > in added context are escaped.",
 };
 
 /** Built-in tool names from packages/core/src/tools/tool-names.ts. Others pass through. */
@@ -51,6 +81,8 @@ export const qwenCode = claudeStyleAdapter({
   id: "qwen-code",
   name: "Qwen Code",
   supports: SUPPORTS,
+  features: HOST_FEATURES,
+  featureNotes: FEATURE_NOTES,
   configDir: qwenDir,
   // UserPromptSubmit and PostToolUse read top-level decision "block" with reason.
   blockOutput: (_event, _native, reason) => ({ decision: "block", reason }),

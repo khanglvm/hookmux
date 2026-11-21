@@ -8,7 +8,14 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { joinContext } from "../core/compose.ts";
-import type { CanonicalEvent, EffectKind, HookEvent, HubResult } from "../core/types.ts";
+import { cells, type FeatureTable } from "../core/features.ts";
+import {
+  CANONICAL_EVENTS,
+  type CanonicalEvent,
+  type EffectKind,
+  type HookEvent,
+  type HubResult,
+} from "../core/types.ts";
 import { type HostIdentity, parseHostPayload } from "./event.ts";
 import { installEntries, installedEvents, type JsonHookLayout, uninstallEntries } from "./json-config.ts";
 import type { HostAdapter } from "./types.ts";
@@ -35,6 +42,35 @@ const SUPPORTS: Record<CanonicalEvent, EffectKind[]> = {
   "session.start": ["inject", "notify"],
   "tool.before": ["block", "notify"],
   "tool.after": ["inject", "block", "notify"],
+};
+
+/**
+ * Feature facts, from the Gemini CLI source named at the top of this file.
+ * - host.version: no version in the payload (core/src/hooks/types.ts:141-147).
+ * - prompt.origin: every BeforeAgent prompt counts as the user's (see parse).
+ * - inject.markup: < and > are escaped (core/src/hooks/types.ts:263-277).
+ * - inject.inline: no output cap (core/src/hooks/hookRunner.ts:424-431).
+ * - block.prevents: BeforeAgent and BeforeTool deny first (core/src/core/client.ts:196-219;
+ *   core/src/scheduler/hook-utils.ts:50-80); AfterTool denies after the tool ran
+ *   (core/src/core/coreToolHookTriggers.ts:207-237).
+ * - block.suppress-prompt: decision "deny" drops the prompt from history (core/src/core/client.ts:965-981).
+ * Unknown: file_path in every edit tool, and who sees a block reason. BeforeTool cannot inject, so the
+ * inject.before-call cell is derived.
+ */
+const HOST_FEATURES: FeatureTable = {
+  "host.version": cells(false, ...CANONICAL_EVENTS),
+  "prompt.origin": cells(false, "prompt.submit"),
+  "tool.file-path": cells(null, "tool.before", "tool.after"),
+  "inject.markup": cells(false, "prompt.submit", "session.start", "tool.after"),
+  "inject.inline": cells(true, "prompt.submit", "session.start", "tool.after"),
+  "inject.before-call": {},
+  "block.prevents": { ...cells(true, "prompt.submit", "tool.before"), ...cells(false, "tool.after") },
+  "block.reason-to-agent": cells(null, "prompt.submit", "tool.before", "tool.after"),
+  "block.suppress-prompt": cells(true, "prompt.submit"),
+};
+
+const FEATURE_NOTES: HostAdapter["featureNotes"] = {
+  "inject.markup": "< and > are escaped and the context is wrapped in hook_context tags.",
 };
 
 /** Gemini sets no output cap (core/src/hooks/hookRunner.ts:424-431); hookmux keeps the Claude-sized budget. */
@@ -98,6 +134,8 @@ const HOST: HostIdentity = {
   nativeEvents: NATIVE,
   supports: SUPPORTS,
   contextChars: CONTEXT_CHARS,
+  features: HOST_FEATURES,
+  featureNotes: FEATURE_NOTES,
 };
 
 export const geminiCli: HostAdapter = {

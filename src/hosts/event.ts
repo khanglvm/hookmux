@@ -2,12 +2,16 @@
 // session_id, cwd, hook_event_name, prompt, tool_name, tool_input and source.
 // Each adapter supplies what differs: prompt origin and the tool-name mapping.
 
+import { featuresFor } from "../core/features.ts";
 import type { CanonicalEvent, HookEvent, Origin } from "../core/types.ts";
 import { asRecord, str } from "./payload.ts";
 import type { HostAdapter } from "./types.ts";
 
 /** The static facts about a host that every parsed event carries. */
-export type HostIdentity = Pick<HostAdapter, "id" | "name" | "nativeEvents" | "supports" | "contextChars">;
+export type HostIdentity = Pick<
+  HostAdapter,
+  "id" | "name" | "nativeEvents" | "supports" | "contextChars" | "features" | "featureNotes"
+>;
 
 export interface PayloadReading {
   /** Origin of a prompt.submit payload; every other event gets "unknown". */
@@ -37,6 +41,7 @@ export function parseHostPayload(
       nativeEvent: str(p.hook_event_name) ?? (host.nativeEvents[event] as string),
       canonicalEvent: event,
       supports: host.supports[event],
+      features: featuresFor(host, event),
       limits: { contextChars: host.contextChars },
     },
     sessionId: str(p.session_id) ?? "",

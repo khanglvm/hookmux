@@ -46,6 +46,10 @@ Plugins name canonical events (`prompt.submit`, `tool.before`) and effects (`inj
 
 When a plugin does need to know the client, it can branch with a `host` check or override parts of itself in a `[host.<id>]` table. Both use the same merge rules as user overrides, so there is one mechanism to learn.
 
+Supported effects are too coarse for some plugins. A block after a tool call exists on several clients, but the tool has already run, and the same inject can arrive with its `<` and `>` escaped. So each adapter also states a small fixed list of features per event, each yes, no or unknown, and the `host` check tests them with `features` and `lacks`. This works like CSS `@supports`: the plugin asks what the client does, not which client it is. Unknown is a real answer. An adapter writes yes or no only when it can cite the client's docs or source, and a check that needs an unknown feature is unknown, not false.
+
+An effect can carry a `fallback` list too. It says what to do where the client cannot perform the effect, and the engine's default (a block becomes a notice, everything else is dropped) applies only when the list is absent. A fallback never adds a block, and a block dropped for lacking a rule never falls back. One function, `resolveEffect`, makes this decision for the hook (and so for `explain`, which runs the engine), `validate` and `test`, so the compatibility report cannot disagree with what the engine does.
+
 ## Private by default
 
 The decision log is off until you turn it on, and it stores a hash and the length of each prompt rather than the text unless you ask for prompts too. hookmux collects no telemetry.

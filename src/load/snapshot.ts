@@ -10,8 +10,17 @@ import type { HomePaths } from "../runtime/paths.ts";
 import { VERSION } from "../version.ts";
 import type { HubSettings } from "./config.ts";
 
-export const REGISTRY_FORMAT = 4;
-export const KNOWN_HOSTS = ["claude-code", "codex", "gemini-cli", "qwen-code", "droid", "qoder", "codebuddy"];
+export const REGISTRY_FORMAT = 5;
+export const KNOWN_HOSTS = [
+  "claude-code",
+  "codex",
+  "gemini-cli",
+  "qwen-code",
+  "droid",
+  "qoder",
+  "codebuddy",
+  "opencode",
+];
 
 export interface SourceStamp {
   path: string;

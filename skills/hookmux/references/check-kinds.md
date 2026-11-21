@@ -40,13 +40,15 @@ True when the working folder matches one of the globs.
 
 ## `host`
 
-True when the agent client matches: its id, a version range, or the effects it supports on this event. Unknown version gives unknown.
+True when the agent client matches: its id, a version range, the effects it supports on this event, or the features it has (features) or lacks (lacks). Unknown version or feature gives unknown.
 
-| Option     | Meaning                                     |
-| ---------- | ------------------------------------------- |
-| `id`       | list of host ids, e.g. ["codex"]            |
-| `version`  | range such as ">=0.40" or ">=1.2 <2"        |
-| `supports` | list of effects that must be supported here |
+| Option     | Meaning                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| `id`       | list of host ids, e.g. ["codex"]                                                             |
+| `version`  | range such as ">=0.40" or ">=1.2 <2"                                                         |
+| `supports` | list of effects that must be supported here                                                  |
+| `features` | list of feature ids that must all be yes here, e.g. ["inject.markup"]; unknown gives unknown |
+| `lacks`    | list of feature ids that must all be no here, e.g. ["block.prevents"]; unknown gives unknown |
 
 ## `keywords`
 

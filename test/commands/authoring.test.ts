@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import "../../src/checks/index.ts";
 import { listChecks } from "../../src/checks/registry.ts";
+import { FEATURES } from "../../src/core/features.ts";
 import { KNOWN_KEYS } from "../../src/load/manifest.ts";
 import { cli, MOODBOARD, moodboardCopy, sandbox, trustInstalled } from "./helpers.ts";
 
@@ -44,6 +45,7 @@ test("explain --json has a stable shape and the host's exact stdout", async () =
     "errors",
     "event",
     "host",
+    "hostFeatures",
     "notices",
     "plugins",
     "prompt",
@@ -103,6 +105,27 @@ test("schema --json documents every manifest key and check kind", async () => {
     listChecks().map((c) => c.kind),
   );
   assert.ok(schema.hosts.some((h: { id: string }) => h.id === "claude-code"));
+  assert.deepEqual(
+    schema.features.map((f: { id: string }) => f.id),
+    FEATURES.map((f) => f.id),
+  );
+  const qoder = schema.hosts.find((h: { id: string }) => h.id === "qoder");
+  assert.equal(qoder.events["tool.after"].features["block.prevents"], false);
+});
+
+test("validate --json carries compat rows, and a dropped effect leaves the exit code at 0", async () => {
+  const sb = sandbox();
+  const src = moodboardCopy(sb);
+  const manifest = [
+    'schema = 1\nid = "moodboard-src"\nevents = ["tool.after"]\nwhen = "any"',
+    '[checks.any]\nkind = "host"\nlacks = ["block.prevents"]',
+    '[[then]]\neffect = "block"\nreason = "revert it"\nfallback = []',
+  ].join("\n\n");
+  writeFileSync(join(src, "plugin.toml"), manifest);
+  const r = await cli(sb, "validate", src, "--json");
+  assert.equal(r.code, 0, r.stdout);
+  const qoder = JSON.parse(r.stdout).compat.find((row: { host: string }) => row.host === "qoder");
+  assert.deepEqual([qoder.outcome, qoder.as, qoder.via], ["dropped", null, "author"]);
 });
 
 test("unknown flags are usage errors with exit 2", async () => {

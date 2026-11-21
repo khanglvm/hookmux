@@ -27,14 +27,24 @@ export const MANIFEST_KEY_DOCS: Record<string, string> = {
   host: "per-host overrides: [host.<id>] tables merged over the plugin for that host",
 };
 
+const FALLBACK_DOC =
+  'list of "inject" and "notify": what to try, in order, where the host cannot perform this effect; [] drops it. Absent keeps the default.';
+
 export const EFFECT_DOCS: Record<string, { summary: string; fields: Record<string, string> }> = {
-  inject: { summary: "add text to the agent's context", fields: { text: "text to add, max 4000 characters" } },
+  inject: {
+    summary: "add text to the agent's context",
+    fields: { text: "text to add, max 4000 characters", fallback: FALLBACK_DOC },
+  },
   block: {
     summary: "stop the prompt or tool call; needs a rule-backed check to agree unless config allows otherwise",
     fields: {
       reason: "text shown to the user and the agent, max 4000 characters",
       suppress_original_prompt: "prompt.submit only: true hides the blocked prompt",
+      fallback: FALLBACK_DOC,
     },
   },
-  notify: { summary: "show a message to the user without changing the context", fields: { text: "message text" } },
+  notify: {
+    summary: "show a message to the user without changing the context",
+    fields: { text: "message text", fallback: FALLBACK_DOC },
+  },
 };

@@ -3,7 +3,8 @@
 
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import type { CheckSpec } from "../core/types.ts";
+import { type FeatureId, isFeatureId } from "../core/features.ts";
+import type { CheckSpec, Tri } from "../core/types.ts";
 import { registerCheck } from "./registry.ts";
 
 function stringList(value: unknown): value is string[] {
@@ -52,25 +53,50 @@ export function satisfiesRange(version: string, range: string): boolean {
     });
 }
 
+/** Three-valued AND: one false decides, otherwise one unknown leaves it unknown. */
+function allOf(parts: Tri[]): Tri {
+  if (parts.includes(false)) return false;
+  return parts.includes(null) ? null : true;
+}
+
+/** Unknown feature ids are rejected so a typo cannot read as "unknown on every host". */
+function featureProblems(spec: CheckSpec, key: "features" | "lacks", problems: string[]): void {
+  requireList(spec, key, problems, true);
+  if (!stringList(spec[key])) return;
+  for (const id of spec[key] as string[]) if (!isFeatureId(id)) problems.push(`${key}: unknown feature '${id}'`);
+}
+
+/** The feature ids named in both `features` and `lacks`, which no host can satisfy. */
+function contradictions(spec: CheckSpec): string[] {
+  if (!stringList(spec.features) || !stringList(spec.lacks)) return [];
+  return spec.features.filter((id) => (spec.lacks as string[]).includes(id));
+}
+
 registerCheck({
   kind: "host",
   summary:
-    "True when the agent client matches: its id, a version range, or the effects it supports on this event. Unknown version gives unknown.",
+    "True when the agent client matches: its id, a version range, the effects it supports on this event, or the features it has (features) or lacks (lacks). Unknown version or feature gives unknown.",
   options: {
     id: `list of host ids, e.g. ["codex"]`,
     version: `range such as ">=0.40" or ">=1.2 <2"`,
     supports: "list of effects that must be supported here",
+    features: `list of feature ids that must all be yes here, e.g. ["inject.markup"]; unknown gives unknown`,
+    lacks: `list of feature ids that must all be no here, e.g. ["block.prevents"]; unknown gives unknown`,
   },
   tier: 0,
   output: "bool",
   modelBacked: false,
   validate(spec) {
     const problems: string[] = [];
-    if (spec.id === undefined && spec.version === undefined && spec.supports === undefined) {
-      problems.push("host check needs at least one of id, version, supports");
+    const keys = ["id", "version", "supports", "features", "lacks"] as const;
+    if (keys.every((k) => spec[k] === undefined)) {
+      problems.push(`host check needs at least one of ${keys.join(", ")}`);
     }
     requireList(spec, "id", problems, true);
     requireList(spec, "supports", problems, true);
+    featureProblems(spec, "features", problems);
+    featureProblems(spec, "lacks", problems);
+    for (const id of contradictions(spec)) problems.push(`${id} is in both features and lacks`);
     if (spec.version !== undefined) {
       const ok =
         typeof spec.version === "string" &&
@@ -84,16 +110,23 @@ registerCheck({
   },
   run(spec, ctx) {
     const host = ctx.event.host;
-    if (spec.id !== undefined && !(spec.id as string[]).includes(host.id)) return { value: false };
-    if (spec.supports !== undefined && !(spec.supports as string[]).every((e) => host.supports.includes(e as never))) {
-      return { value: false };
+    const parts: Tri[] = [];
+    if (spec.id !== undefined) parts.push((spec.id as string[]).includes(host.id));
+    if (spec.supports !== undefined) {
+      parts.push((spec.supports as string[]).every((e) => host.supports.includes(e as never)));
     }
+    // An unknown host version leaves the check unknown instead of guessing.
     if (spec.version !== undefined) {
-      // An unknown host version leaves the check unknown instead of guessing.
-      if (host.version === null) return { value: null };
-      return { value: satisfiesRange(host.version, spec.version as string) };
+      parts.push(host.version === null ? null : satisfiesRange(host.version, spec.version as string));
     }
-    return { value: true };
+    // A feature the event has no value for reads as unknown, like an undeclared one.
+    const fact = (id: string): Tri => host.features[id as FeatureId] ?? null;
+    for (const id of (spec.features as string[] | undefined) ?? []) parts.push(fact(id));
+    for (const id of (spec.lacks as string[] | undefined) ?? []) {
+      const value = fact(id);
+      parts.push(value === null ? null : !value);
+    }
+    return { value: allOf(parts) };
   },
 });
 

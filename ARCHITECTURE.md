@@ -19,7 +19,7 @@ The CLI (`hookmux init`, `add`, `promote`, `test` and the rest) manages the same
 
 - `launcher/hookmux-hook.sh`: POSIX shell entry point. Runs the engine under a watchdog and prints its answer only when the engine exits 0.
 - `src/hook-main.ts`: one hook run. Reads stdin, picks the adapter, runs the engine, writes stdout, then logs.
-- `src/hosts/`: one adapter per client (parse, render, sample payloads, config editor). `claude-style.ts` builds the clients that copied Claude Code's contract; `json-config.ts` edits their JSON configs; `codex-trust.ts` approves Codex hub entries.
+- `src/hosts/`: one adapter per client (parse, render, sample payloads, config editor). `claude-style.ts` builds the clients that copied Claude Code's contract; `json-config.ts` edits their JSON configs; `codex-trust.ts` approves Codex hub entries; `opencode.ts` installs `launcher/opencode-plugin.js` as an opencode plugin instead of a config entry.
 - `src/core/`: the engine (tiered, three-valued evaluation), the `when` expression parser, templates, and `compose.ts`, which merges plugin results and applies effect fallbacks.
 - `src/checks/`: check kinds (`regex`, `keywords`, `tool`, `host`, `script`, `classify` and others). Each file registers itself.
 - `src/providers/`: the OpenAI-compatible client behind model-backed checks, with a circuit breaker and call policy.

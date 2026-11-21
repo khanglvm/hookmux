@@ -10,7 +10,9 @@ import {
   CANONICAL_EVENTS,
   type CanonicalEvent,
   type CheckSpec,
+  type EffectKind,
   type EffectSpec,
+  type Fallback,
   type Origin,
   PHASES,
   type Phase,
@@ -294,10 +296,40 @@ function readEffects(value: unknown, problems: string[]): EffectSpec[] {
       continue;
     }
     if (text.length > MAX_TEXT_CHARS) problems.push(`${at} text longer than ${MAX_TEXT_CHARS} chars`);
-    if (e.effect === "inject" || e.effect === "notify") out.push({ effect: e.effect, text });
+    const fallback = e.fallback === undefined ? {} : { fallback: readFallback(e.fallback, e.effect, at, problems) };
+    if (e.effect === "inject" || e.effect === "notify") out.push({ effect: e.effect, text, ...fallback });
     else if (e.effect === "block") {
-      out.push({ effect: "block", reason: text, suppressOriginalPrompt: e.suppress_original_prompt === true });
+      out.push({
+        effect: "block",
+        reason: text,
+        suppressOriginalPrompt: e.suppress_original_prompt === true,
+        ...fallback,
+      });
     } else problems.push(`${at}: unknown effect '${String(e.effect)}'`);
+  }
+  return out;
+}
+
+const FALLBACK_KINDS: readonly string[] = ["inject", "notify"];
+
+/**
+ * A fallback lists the effects to try where the host cannot perform this one.
+ * Only inject and notify are allowed, so a fallback can never add a block, and
+ * an effect never lists itself or repeats an entry.
+ */
+function readFallback(value: unknown, own: unknown, at: string, problems: string[]): Fallback {
+  if (!Array.isArray(value)) {
+    problems.push(`${at}.fallback must be a list such as ["inject", "notify"]`);
+    return [];
+  }
+  const out: Fallback = [];
+  for (const item of value) {
+    if (item === "block") problems.push(`${at}.fallback cannot contain 'block': a fallback never adds a block`);
+    else if (typeof item !== "string" || !FALLBACK_KINDS.includes(item)) {
+      problems.push(`${at}.fallback: unknown effect '${String(item)}' (use inject or notify)`);
+    } else if (item === (own as EffectKind)) problems.push(`${at}.fallback lists the effect's own kind '${item}'`);
+    else if (out.includes(item as Fallback[number])) problems.push(`${at}.fallback lists '${item}' twice`);
+    else out.push(item as Fallback[number]);
   }
   return out;
 }

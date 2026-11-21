@@ -222,6 +222,7 @@ hookmux uses four events across agents: `prompt.submit` (you send a prompt), `se
 | Codex          | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |
 | Factory Droid  | inject, block, notify | inject, notify  | block, notify         | inject, block, notify |
 | Gemini CLI     | inject, block, notify | inject, notify  | block, notify         | inject, block, notify |
+| opencode       | inject, notify        | inject, notify  | block, notify         | inject, notify        |
 | Qoder CLI      | inject, block, notify | inject, notify  | inject, block, notify | inject, notify        |
 | Qwen Code      | inject, block, notify | inject, notify  | inject, block, notify | inject, block, notify |
 <!-- hosts:end -->
@@ -230,6 +231,7 @@ Tested versions:
 
 - Claude Code 2.1.325 and Codex 0.167.1 have been run live: adding context and blocking a prompt both work.
 - The Gemini CLI adapter was written from the Gemini CLI source (v0.68.0). The Qwen Code (0.28.0), Factory Droid (1.16.0), Qoder CLI (1.1.94) and CodeBuddy Code (2.185.0) adapters were written from each client's hooks documentation. All five are covered by tests but have not been run against a live client yet.
+- opencode 1.19.6 has been run live with a scripted model: context on prompts, at session start and after tool calls, and blocking a tool call, all work. hookmux installs a small plugin file there instead of a hook entry.
 - Cursor and Devin CLI read Claude Code's `~/.claude/settings.json`, so they run hookmux's Claude Code entries too. That path is untested.
 
 Codex runs a new or changed hook entry only after it is approved. `init`, `sync` and every command that changes a plugin approve hookmux's own entries through `codex app-server` and leave every other hook as it was; if that fails, approve them in Codex's `/hooks` screen.

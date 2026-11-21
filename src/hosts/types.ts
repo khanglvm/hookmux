@@ -2,6 +2,7 @@
 // HookEvent, renders a HubResult back in the client's format, and edits the
 // client's hook config. Plugins and the engine never see host formats.
 
+import type { FeatureId, FeatureTable } from "../core/features.ts";
 import type { CanonicalEvent, EffectKind, HookEvent, HubResult } from "../core/types.ts";
 
 export interface HostAdapter {
@@ -13,6 +14,18 @@ export interface HostAdapter {
   /** Effects the client can perform per canonical event. */
   supports: Record<CanonicalEvent, EffectKind[]>;
   contextChars: number;
+  /**
+   * What the client really does, per feature and event. Every feature must be stated, so a
+   * new adapter cannot skip one; use null where the client's docs and source are silent.
+   * A feature that qualifies an effect the client cannot perform on that event is derived
+   * as no and left out. Each yes or no carries a source comment.
+   */
+  features: FeatureTable;
+  /**
+   * Why a feature is no on this client, shown in `hookmux schema` and, under each event
+   * where the adapter states no, in the host docs.
+   */
+  featureNotes?: Partial<Record<FeatureId, string>>;
   /**
    * Builds the event from stdin. Returns null when the payload is not usable,
    * in which case the hook produces the safe no-op output.

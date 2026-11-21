@@ -59,6 +59,17 @@ Context limit: 10000 characters.
 | `tool.before`   | `BeforeTool`   | block, notify         |
 | `tool.after`    | `AfterTool`    | inject, block, notify |
 
+## opencode (`opencode`)
+
+Context limit: 10000 characters.
+
+| Canonical event | Native event          | Effects        |
+| --------------- | --------------------- | -------------- |
+| `prompt.submit` | `chat.message`        | inject, notify |
+| `session.start` | `event`               | inject, notify |
+| `tool.before`   | `tool.execute.before` | block, notify  |
+| `tool.after`    | `tool.execute.after`  | inject, notify |
+
 ## Qoder CLI (`qoder`)
 
 Context limit: 10000 characters.
@@ -80,3 +91,83 @@ Context limit: 10000 characters.
 | `session.start` | `SessionStart`     | inject, notify        |
 | `tool.before`   | `PreToolUse`       | inject, block, notify |
 | `tool.after`    | `PostToolUse`      | inject, block, notify |
+
+## Feature matrix
+
+Each table covers one event. "yes" and "no" come from the client's docs or source; "?" means they are silent, and a `host` check reads it as unknown. A feature about an effect is "no" wherever the client cannot perform that effect. A note under a table explains why a client is "no" there.
+
+### `prompt.submit`
+
+| Host           | `host.version` | `prompt.origin` | `inject.markup` | `inject.inline` | `block.prevents` | `block.reason-to-agent` | `block.suppress-prompt` |
+| -------------- | -------------- | --------------- | --------------- | --------------- | ---------------- | ----------------------- | ----------------------- |
+| Claude Code    | no             | yes             | yes             | yes             | yes              | no                      | yes                     |
+| CodeBuddy Code | no             | no              | ?               | ?               | yes              | no                      | no                      |
+| Codex          | no             | yes             | ?               | no              | yes              | ?                       | no                      |
+| Factory Droid  | no             | no              | ?               | ?               | yes              | ?                       | no                      |
+| Gemini CLI     | no             | no              | no              | yes             | yes              | ?                       | yes                     |
+| opencode       | no             | yes             | ?               | ?               | no               | no                      | no                      |
+| Qoder CLI      | no             | no              | ?               | ?               | yes              | ?                       | no                      |
+| Qwen Code      | no             | yes             | no              | ?               | yes              | ?                       | no                      |
+
+- Claude Code, `block.reason-to-agent`: On a prompt the reason is shown to the user only.
+- CodeBuddy Code, `block.reason-to-agent`: A blocked prompt's reason is shown to the user only.
+- Codex, `inject.inline`: Context over about 2,500 tokens is saved to a file and the model sees a preview.
+- Gemini CLI, `inject.markup`: < and > are escaped and the context is wrapped in hook_context tags.
+- Qwen Code, `inject.markup`: < and > in added context are escaped.
+
+### `session.start`
+
+| Host           | `host.version` | `inject.markup` | `inject.inline` |
+| -------------- | -------------- | --------------- | --------------- |
+| Claude Code    | no             | yes             | yes             |
+| CodeBuddy Code | no             | ?               | ?               |
+| Codex          | no             | ?               | no              |
+| Factory Droid  | no             | ?               | ?               |
+| Gemini CLI     | no             | no              | yes             |
+| opencode       | no             | ?               | ?               |
+| Qoder CLI      | no             | ?               | ?               |
+| Qwen Code      | no             | no              | ?               |
+
+- Codex, `inject.inline`: Context over about 2,500 tokens is saved to a file and the model sees a preview.
+- Gemini CLI, `inject.markup`: < and > are escaped and the context is wrapped in hook_context tags.
+- Qwen Code, `inject.markup`: < and > in added context are escaped.
+
+### `tool.before`
+
+| Host           | `host.version` | `tool.file-path` | `inject.markup` | `inject.inline` | `inject.before-call` | `block.prevents` | `block.reason-to-agent` |
+| -------------- | -------------- | ---------------- | --------------- | --------------- | -------------------- | ---------------- | ----------------------- |
+| Claude Code    | no             | yes              | yes             | yes             | yes                  | yes              | yes                     |
+| CodeBuddy Code | no             | yes              | ?               | ?               | ?                    | yes              | ?                       |
+| Codex          | no             | no               | ?               | no              | ?                    | yes              | ?                       |
+| Factory Droid  | no             | no               | no              | no              | no                   | yes              | ?                       |
+| Gemini CLI     | no             | ?                | no              | no              | no                   | yes              | ?                       |
+| opencode       | no             | no               | no              | no              | no                   | yes              | yes                     |
+| Qoder CLI      | no             | yes              | ?               | ?               | ?                    | yes              | ?                       |
+| Qwen Code      | no             | yes              | no              | ?               | no                   | yes              | ?                       |
+
+- Codex, `tool.file-path`: apply_patch edits carry patch text in tool_input.command.
+- Codex, `inject.inline`: Context over about 2,500 tokens is saved to a file and the model sees a preview.
+- Factory Droid, `tool.file-path`: ApplyPatch input has no file_path.
+- opencode, `tool.file-path`: apply_patch edits carry patch text, not a file path.
+- Qwen Code, `inject.markup`: < and > in added context are escaped.
+- Qwen Code, `inject.before-call`: Context added before a tool call is appended to that call's result.
+
+### `tool.after`
+
+| Host           | `host.version` | `tool.file-path` | `inject.markup` | `inject.inline` | `block.prevents` | `block.reason-to-agent` |
+| -------------- | -------------- | ---------------- | --------------- | --------------- | ---------------- | ----------------------- |
+| Claude Code    | no             | yes              | yes             | yes             | no               | yes                     |
+| CodeBuddy Code | no             | yes              | ?               | ?               | no               | no                      |
+| Codex          | no             | no               | ?               | no              | no               | yes                     |
+| Factory Droid  | no             | no               | ?               | ?               | no               | yes                     |
+| Gemini CLI     | no             | ?                | no              | yes             | no               | ?                       |
+| opencode       | no             | no               | ?               | ?               | no               | no                      |
+| Qoder CLI      | no             | yes              | ?               | ?               | no               | no                      |
+| Qwen Code      | no             | yes              | no              | ?               | no               | ?                       |
+
+- Codex, `tool.file-path`: apply_patch edits carry patch text in tool_input.command.
+- Codex, `inject.inline`: Context over about 2,500 tokens is saved to a file and the model sees a preview.
+- Factory Droid, `tool.file-path`: ApplyPatch input has no file_path.
+- Gemini CLI, `inject.markup`: < and > are escaped and the context is wrapped in hook_context tags.
+- opencode, `tool.file-path`: apply_patch edits carry patch text, not a file path.
+- Qwen Code, `inject.markup`: < and > in added context are escaped.

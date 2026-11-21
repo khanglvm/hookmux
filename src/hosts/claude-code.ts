@@ -7,7 +7,15 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { joinContext } from "../core/compose.ts";
-import type { CanonicalEvent, EffectKind, HookEvent, HubResult, Origin } from "../core/types.ts";
+import { cells, type FeatureTable } from "../core/features.ts";
+import {
+  CANONICAL_EVENTS,
+  type CanonicalEvent,
+  type EffectKind,
+  type HookEvent,
+  type HubResult,
+  type Origin,
+} from "../core/types.ts";
 import { type HostIdentity, parseHostPayload } from "./event.ts";
 import { installEntries, installedEvents, type JsonHookLayout, uninstallEntries } from "./json-config.ts";
 import type { HostAdapter } from "./types.ts";
@@ -26,6 +34,33 @@ const SUPPORTS: Record<CanonicalEvent, EffectKind[]> = {
   "session.start": ["inject", "notify"],
   "tool.before": ["inject", "block", "notify"],
   "tool.after": ["inject", "block", "notify"],
+};
+
+/**
+ * Feature facts, from the hooks reference (https://code.claude.com/docs/en/hooks) unless noted.
+ * - host.version: the payload has no version field.
+ * - prompt.origin: the <task-notification> wrapper marks system prompts (SYSTEM_PROMPT_PREFIXES).
+ * - tool.file-path: Write and Edit take tool_input.file_path.
+ * - inject.markup and inject.inline: additionalContext arrives as written, up to CONTEXT_CHARS.
+ * - inject.before-call: PreToolUse additionalContext is added before the call runs.
+ * - block.prevents: UserPromptSubmit and PreToolUse block first; PostToolUse "block" follows the tool.
+ * - block.reason-to-agent: PreToolUse and PostToolUse reasons reach Claude; a blocked prompt's reason is for the user.
+ * - block.suppress-prompt: hookSpecificOutput.suppressOriginalPrompt ("What a blocked prompt leaves behind").
+ */
+const HOST_FEATURES: FeatureTable = {
+  "host.version": cells(false, ...CANONICAL_EVENTS),
+  "prompt.origin": cells(true, "prompt.submit"),
+  "tool.file-path": cells(true, "tool.before", "tool.after"),
+  "inject.markup": cells(true, ...CANONICAL_EVENTS),
+  "inject.inline": cells(true, ...CANONICAL_EVENTS),
+  "inject.before-call": cells(true, "tool.before"),
+  "block.prevents": { ...cells(true, "prompt.submit", "tool.before"), ...cells(false, "tool.after") },
+  "block.reason-to-agent": { ...cells(false, "prompt.submit"), ...cells(true, "tool.before", "tool.after") },
+  "block.suppress-prompt": cells(true, "prompt.submit"),
+};
+
+const FEATURE_NOTES: HostAdapter["featureNotes"] = {
+  "block.reason-to-agent": "On a prompt the reason is shown to the user only.",
 };
 
 /** Claude Code caps hook context at 10,000 characters. */
@@ -59,6 +94,8 @@ const HOST: HostIdentity = {
   nativeEvents: NATIVE,
   supports: SUPPORTS,
   contextChars: CONTEXT_CHARS,
+  features: HOST_FEATURES,
+  featureNotes: FEATURE_NOTES,
 };
 
 export const claudeCode: HostAdapter = {

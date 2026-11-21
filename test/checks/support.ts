@@ -24,6 +24,7 @@ export function promptEvent(prompt: string, cwd = tmpdir()): HookEvent {
       nativeEvent: "UserPromptSubmit",
       canonicalEvent: "prompt.submit",
       supports: ["inject", "block"],
+      features: {},
       limits: { contextChars: 10_000 },
     },
     sessionId: "s1",

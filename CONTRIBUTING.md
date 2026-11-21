@@ -25,7 +25,7 @@ pnpm install
 
 CI runs these on Linux and macOS with Node 22, 24 and 26. It also checks the contents of the npm package and keeps `dist/` under 300 KB.
 
-`pnpm build` rewrites `skills/hookmux/references/`, the host table in `README.md` and the tables in `docs/plugins.md` from the engine's registries. Commit those files with your change. CI fails when they differ from a fresh build.
+`pnpm build` rewrites `skills/hookmux/references/`, the host table in `README.md` and the tables in `docs/plugins.md` and `docs/hosts.md` from the engine's registries. Commit those files with your change. CI fails when they differ from a fresh build.
 
 ## Commit messages
 
@@ -54,8 +54,9 @@ A model-backed kind sets `modelBacked: true`. The engine then keeps it from just
 2. `render` must return an empty string for a result with nothing to say, because that is the safe no-op on every client.
 3. Add the adapter to `ADAPTERS` in `src/hosts/index.ts`.
 4. Add the id to `KNOWN_HOSTS` in `src/load/snapshot.ts`, so `[host.<id>]` tables for it are not ignored.
-5. Add tests with payloads in the client's real format and the exact output expected for each.
-6. Run `pnpm build` to regenerate the host tables, and add a section to `docs/hosts.md`. Say whether the adapter was run against the real client.
+5. Declare every feature in `features` (the ids are in `src/core/features.ts`). Write yes or no only where the client's docs or source say so, and put the citation in a comment beside the cell. Use null when they are silent. Leave out a cell that is derived: a feature about an effect the client cannot perform on that event is always no.
+6. Add tests with payloads in the client's real format and the exact output expected for each.
+7. Run `pnpm build` to regenerate the host tables, and add a section to `docs/hosts.md`. Say whether the adapter was run against the real client.
 
 ## Plugins and examples
 

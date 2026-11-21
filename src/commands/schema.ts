@@ -3,6 +3,7 @@
 
 import "../checks/index.ts";
 import { listChecks } from "../checks/registry.ts";
+import { FEATURES, featuresFor } from "../core/features.ts";
 import { CANONICAL_EVENTS, PHASES } from "../core/types.ts";
 import { ADAPTERS } from "../hosts/index.ts";
 import { KNOWN_KEYS, MANIFEST_SCHEMA } from "../load/manifest.ts";
@@ -32,14 +33,20 @@ export function buildSchema() {
     })),
     effects: Object.entries(EFFECT_DOCS).map(([effect, doc]) => ({ effect, ...doc })),
     events: [...CANONICAL_EVENTS],
+    features: FEATURES.map((f) => ({ ...f, events: [...f.events] })),
     hosts: Object.values(ADAPTERS).map((a) => ({
       id: a.id,
       name: a.name,
       contextChars: a.contextChars,
+      featureNotes: a.featureNotes ?? {},
       events: Object.fromEntries(
         CANONICAL_EVENTS.map((e) => [
           e,
-          { native: a.nativeEvents[e], supports: a.nativeEvents[e] ? a.supports[e] : [] },
+          {
+            native: a.nativeEvents[e],
+            supports: a.nativeEvents[e] ? a.supports[e] : [],
+            features: featuresFor(a, e),
+          },
         ]),
       ),
     })),
@@ -69,16 +76,30 @@ export async function run(argv: string[]): Promise<number> {
   }
   section("Events");
   detail(schema.events.join(", "));
+  section("Features (host check: features, lacks)");
+  for (const f of schema.features) detail(`${f.id.padEnd(22)} ${f.events.join(", ").padEnd(40)} ${f.meaning}`);
   section("Hosts");
   for (const h of schema.hosts) {
     detail(bold(`${h.name} (${h.id})`));
     for (const [event, info] of Object.entries(h.events)) {
       detail(`  ${event.padEnd(14)} ${info.native ?? dim("not available")}  ${info.supports.join(", ")}`);
+      const lacks = featureIds(info.features, false);
+      const unknown = featureIds(info.features, null);
+      if (lacks) detail(`    lacks: ${lacks}`);
+      if (unknown) detail(`    unknown: ${unknown}`);
     }
   }
   section("Test cases (tests.toml [[case]])");
   for (const [field, text] of Object.entries(schema.testCase)) detail(`${field.padEnd(8)} ${text}`);
   return 0;
+}
+
+/** The feature ids with this value, comma-separated; empty when none. */
+function featureIds(facts: Record<string, boolean | null | undefined>, value: false | null): string {
+  return Object.entries(facts)
+    .filter(([, v]) => v === value)
+    .map(([id]) => id)
+    .join(", ");
 }
 
 function section(title: string): void {

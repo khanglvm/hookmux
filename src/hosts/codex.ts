@@ -9,7 +9,15 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { joinContext } from "../core/compose.ts";
-import type { CanonicalEvent, EffectKind, HookEvent, HubResult, Origin } from "../core/types.ts";
+import { cells, type FeatureTable } from "../core/features.ts";
+import {
+  CANONICAL_EVENTS,
+  type CanonicalEvent,
+  type EffectKind,
+  type HookEvent,
+  type HubResult,
+  type Origin,
+} from "../core/types.ts";
 import { approveHubEntries } from "./codex-trust.ts";
 import { type HostIdentity, parseHostPayload } from "./event.ts";
 import {
@@ -44,6 +52,34 @@ const SUPPORTS: Record<CanonicalEvent, EffectKind[]> = {
   "session.start": ["inject", "notify"],
   "tool.before": ["inject", "block", "notify"],
   "tool.after": ["inject", "block", "notify"],
+};
+
+/**
+ * Feature facts, from the Codex source named at the top of this file.
+ * - host.version: no version in the payload (hooks/src/schema.rs:568-584).
+ * - prompt.origin: agent_id marks sends from a parent agent (see originOf).
+ * - tool.file-path: apply_patch carries patch text in tool_input.command (CANONICAL_TOOLS).
+ * - inject.inline: context over about 2,500 tokens goes to a file (hooks/src/output_spill.rs:13, 65-104).
+ * - block.prevents: UserPromptSubmit and PreToolUse deny first; PostToolUse "block" follows the tool.
+ * - block.reason-to-agent: a PostToolUse block replaces the tool result with the reason (docs/hosts.md).
+ * - block.suppress-prompt: no such key; a blocked prompt is never recorded (core/src/session/turn.rs:1007-1010).
+ * Unknown: whether < and > survive, whether PreToolUse context precedes the call, and who sees a pre-call reason.
+ */
+const HOST_FEATURES: FeatureTable = {
+  "host.version": cells(false, ...CANONICAL_EVENTS),
+  "prompt.origin": cells(true, "prompt.submit"),
+  "tool.file-path": cells(false, "tool.before", "tool.after"),
+  "inject.markup": cells(null, ...CANONICAL_EVENTS),
+  "inject.inline": cells(false, ...CANONICAL_EVENTS),
+  "inject.before-call": cells(null, "tool.before"),
+  "block.prevents": { ...cells(true, "prompt.submit", "tool.before"), ...cells(false, "tool.after") },
+  "block.reason-to-agent": { ...cells(null, "prompt.submit", "tool.before"), ...cells(true, "tool.after") },
+  "block.suppress-prompt": cells(false, "prompt.submit"),
+};
+
+const FEATURE_NOTES: HostAdapter["featureNotes"] = {
+  "tool.file-path": "apply_patch edits carry patch text in tool_input.command.",
+  "inject.inline": "Context over about 2,500 tokens is saved to a file and the model sees a preview.",
 };
 
 /**
@@ -135,6 +171,8 @@ const HOST: HostIdentity = {
   nativeEvents: NATIVE,
   supports: SUPPORTS,
   contextChars: CONTEXT_CHARS,
+  features: HOST_FEATURES,
+  featureNotes: FEATURE_NOTES,
 };
 
 export const codex: HostAdapter = {

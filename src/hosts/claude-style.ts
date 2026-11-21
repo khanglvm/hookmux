@@ -7,6 +7,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { joinContext } from "../core/compose.ts";
+import type { FeatureId, FeatureTable } from "../core/features.ts";
 import type { CanonicalEvent, EffectKind, HookEvent, HubResult, Origin } from "../core/types.ts";
 import { type HostIdentity, parseHostPayload } from "./event.ts";
 import { installEntries, installedEvents, type JsonHookLayout, uninstallEntries } from "./json-config.ts";
@@ -30,6 +31,9 @@ export interface ClaudeStyleSpec {
   id: string;
   name: string;
   supports: Record<CanonicalEvent, EffectKind[]>;
+  /** What the client does per feature and event; see HostAdapter.features. */
+  features: FeatureTable;
+  featureNotes?: Partial<Record<FeatureId, string>>;
   /** The client's user-level config folder, after its own env override. */
   configDir(env: NodeJS.ProcessEnv): string;
   /** Renders a block for prompt.submit and tool.after; tool.before always denies through permissionDecision. */
@@ -126,6 +130,8 @@ export function claudeStyleAdapter(spec: ClaudeStyleSpec): HostAdapter {
     nativeEvents: CLAUDE_EVENTS,
     supports: spec.supports,
     contextChars: DEFAULT_CONTEXT_CHARS,
+    features: spec.features,
+    ...(spec.featureNotes ? { featureNotes: spec.featureNotes } : {}),
   };
   const tools = spec.canonicalTools ?? {};
   const base = spec.config ?? settingsEditor(spec);

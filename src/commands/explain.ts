@@ -5,6 +5,7 @@
 // unless --run-scripts.
 
 import { runEngine } from "../core/engine.ts";
+import { featuresFor } from "../core/features.ts";
 import {
   CANONICAL_EVENTS,
   type CanonicalEvent,
@@ -123,6 +124,7 @@ function printExplain(e: Explained, opts: { all: boolean; json: boolean }): void
       context: result.context,
       notices: result.notices,
       block: result.block ?? null,
+      hostFeatures: featuresFor(adapter, eventName),
       errors: result.errors,
       stdout: e.stdout,
     });

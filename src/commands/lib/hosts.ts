@@ -85,7 +85,9 @@ export function printHostResults(results: HostResult[]): boolean {
       change.added.length > 0 ? `added ${change.added.join(", ")}` : "",
       change.removed.length > 0 ? `removed ${change.removed.join(", ")}` : "",
     ].filter(Boolean);
-    say("ok", `${adapter.name}: ${parts.length > 0 ? parts.join("; ") : "up to date"} (${change.file})`);
+    // A rewrite that adds no event, such as an opencode plugin file moving to a newer template.
+    const summary = parts.length > 0 ? parts.join("; ") : change.changed ? "updated" : "up to date";
+    say("ok", `${adapter.name}: ${summary} (${change.file})`);
     for (const note of change.notes) detail(`! ${note}`);
   }
   return ok;

@@ -2,6 +2,8 @@
 // Adapters turn a host payload into a HookEvent; the engine turns plugins plus
 // that event into a HubResult; the adapter renders the result for the host.
 
+import type { FeatureFacts } from "./features.ts";
+
 /** Hook points that hookmux exposes to plugins, whatever the host calls them. */
 export const CANONICAL_EVENTS = ["prompt.submit", "session.start", "tool.before", "tool.after"] as const;
 export type CanonicalEvent = (typeof CANONICAL_EVENTS)[number];
@@ -29,6 +31,8 @@ export interface HostContext {
   canonicalEvent: CanonicalEvent;
   /** Effects this host can perform on this event. */
   supports: EffectKind[];
+  /** What this host does and does not do on this event; see src/core/features.ts. */
+  features: FeatureFacts;
   limits: { contextChars: number };
 }
 
@@ -66,18 +70,27 @@ export interface Signal {
   ms?: number;
 }
 
+/** Effects an author may name as a fallback; block is never one, so a fallback cannot add a block. */
+export type Fallback = ("inject" | "notify")[];
+
 export interface InjectEffect {
   effect: "inject";
   text: string;
+  /** Tried in order where the host cannot inject; absent keeps the engine's own fallback. */
+  fallback?: Fallback;
 }
 export interface BlockEffect {
   effect: "block";
   reason: string;
   suppressOriginalPrompt?: boolean;
+  /** Tried in order where the host cannot block; absent means a notice, then dropped. */
+  fallback?: Fallback;
 }
 export interface NotifyEffect {
   effect: "notify";
   text: string;
+  /** Tried in order where the host cannot notify; absent means dropped. */
+  fallback?: Fallback;
 }
 export type EffectSpec = InjectEffect | BlockEffect | NotifyEffect;
 

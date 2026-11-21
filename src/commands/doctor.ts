@@ -113,7 +113,9 @@ function applyFixes(paths: HomePaths): FixResult[] {
     const failed = hosts.filter((h) => h.error);
     if (failed.length > 0) throw new Error(failed.map((h) => `${h.adapter.id}: ${h.error}`).join("; "));
     const added = hosts.flatMap((h) => h.change?.added.map((e) => `${h.adapter.id} ${e}`) ?? []);
-    return added.length > 0 ? `added ${added.join(", ")}` : "nothing missing";
+    if (added.length > 0) return `added ${added.join(", ")}`;
+    const updated = hosts.filter((h) => h.change?.changed).map((h) => h.adapter.id);
+    return updated.length > 0 ? `updated ${updated.join(", ")}` : "nothing missing";
   });
   attempt("pruned old sessions", () => `${pruneSessions(paths.sessions)} removed`);
   return results;

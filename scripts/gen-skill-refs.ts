@@ -1,5 +1,5 @@
 // Regenerates the authoring skill's references, the README host table and the
-// tables in docs/plugins.md from the engine's own registries, so the skill and
+// tables in docs/plugins.md and docs/hosts.md from the engine's own registries, so the skill and
 // docs always describe the engine they ship with. `pnpm build` runs it first;
 // CI fails when the committed output differs from a fresh run. Rendering is
 // pure; file writes sit in main().
@@ -9,7 +9,8 @@ import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { fileURLToPath } from "node:url";
 import "../src/checks/index.ts";
 import { type CheckKind, listChecks, type Tier } from "../src/checks/registry.ts";
-import { CANONICAL_EVENTS, type EffectKind } from "../src/core/types.ts";
+import { FEATURES, type FeatureDef, featuresFor, isDeclared } from "../src/core/features.ts";
+import { CANONICAL_EVENTS, type CanonicalEvent, type EffectKind } from "../src/core/types.ts";
 import { ADAPTERS } from "../src/hosts/index.ts";
 import type { HostAdapter } from "../src/hosts/types.ts";
 
@@ -17,6 +18,7 @@ const root = (path: string) => new URL(`../${path}`, import.meta.url);
 const REFS = "skills/hookmux/references";
 const README = "README.md";
 const PLUGIN_DOCS = "docs/plugins.md";
+const HOST_DOCS = "docs/hosts.md";
 const GENERATED = ["check-kinds.md", "effects.md", "hosts.md", "plugin-format.md"].map((f) => `${REFS}/${f}`);
 
 const TIER_LABEL: Record<Tier, string> = { 0: "0 (in-process)", 1: "1 (subprocess)", 2: "2 (model call)" };
@@ -28,18 +30,19 @@ const TIER_LABEL: Record<Tier, string> = { 0: "0 (in-process)", 1: "1 (subproces
  */
 const EFFECT_DOCS: Record<EffectKind, { fields: string; behaviour: string }> = {
   inject: {
-    fields: "`text`",
+    fields: "`text`, `fallback`",
     behaviour:
-      "Adds the text to the agent's context. Dropped when the host cannot add context on this event or the context budget is used up.",
+      "Adds the text to the agent's context. Dropped when the host cannot add context on this event or the context budget is used up. `fallback` lists effects to try instead where the host cannot add context.",
   },
   block: {
-    fields: "`reason`, `suppress_original_prompt` (prompt.submit only, default false)",
+    fields: "`reason`, `suppress_original_prompt` (prompt.submit only, default false), `fallback`",
     behaviour:
-      "Stops the prompt or tool call and shows the reason. The first block in output order wins. With `block_requires_rule` on (the default), a check that is not model-backed must be true. Where the host cannot block, it becomes a notice; where it cannot notify either, it is dropped.",
+      "Stops the prompt or tool call and shows the reason. The first block in output order wins. With `block_requires_rule` on (the default), a check that is not model-backed must be true. Where the host cannot block, a `fallback` list picks what to do instead (`inject`, `notify`, or `[]` to drop); without one it becomes a notice, or is dropped where the host cannot notify either. A block dropped for lacking a rule never falls back.",
   },
   notify: {
-    fields: "`text`",
-    behaviour: "Shows the text to the user, not the agent. Dropped when the host cannot notify on this event.",
+    fields: "`text`, `fallback`",
+    behaviour:
+      "Shows the text to the user, not the agent. Dropped when the host cannot notify on this event, unless `fallback` names an effect to use instead.",
   },
 };
 
@@ -102,6 +105,55 @@ function supportRows(hosts: HostAdapter[]): string[] {
   return rows;
 }
 
+/** The vocabulary table for docs/plugins.md: what each feature id means and where it applies. */
+function featureRows(): string[] {
+  const rows = ["| Feature | Events | Meaning |", "|---|---|---|"];
+  for (const f of FEATURES) {
+    rows.push(`| \`${f.id}\` | ${f.events.map((e) => `\`${e}\``).join(", ")} | ${cell(f.meaning)} |`);
+  }
+  return rows;
+}
+
+function factCell(value: boolean | null | undefined): string {
+  if (value === undefined) return "n/a";
+  return value === null ? "?" : value ? "yes" : "no";
+}
+
+/** One table per event: a row per host, a column per feature that applies to the event. */
+function compatTables(hosts: HostAdapter[], level: string): string[] {
+  const out: string[] = [];
+  for (const event of CANONICAL_EVENTS) {
+    const columns = FEATURES.filter((f) => f.events.includes(event));
+    out.push("", `${level} \`${event}\``, "", `| Host | ${columns.map((f) => `\`${f.id}\``).join(" | ")} |`);
+    out.push(`|---|${columns.map(() => "---").join("|")}|`);
+    for (const h of hosts) {
+      const facts = featuresFor(h, event);
+      out.push(`| ${h.name} | ${columns.map((f) => factCell(facts[f.id as keyof typeof facts])).join(" | ")} |`);
+    }
+    out.push(...compatNotes(hosts, columns, event));
+  }
+  return out;
+}
+
+/**
+ * The host-specific detail behind a cell, listed under its table. A note explains a
+ * no, so it is shown only where the adapter states no for this event; a derived no
+ * (the client cannot perform the effect at all here) needs no note.
+ */
+function compatNotes(hosts: HostAdapter[], columns: FeatureDef[], event: CanonicalEvent): string[] {
+  const notes = hosts.flatMap((h) =>
+    columns.flatMap((f) => {
+      const note = h.featureNotes?.[f.id as keyof typeof h.featureNotes];
+      const statedNo = isDeclared(h, f, event) && h.features[f.id as keyof typeof h.features][event] === false;
+      return note && statedNo ? [`- ${h.name}, \`${f.id}\`: ${note}`] : [];
+    }),
+  );
+  return notes.length > 0 ? ["", ...notes] : [];
+}
+
+const COMPAT_INTRO =
+  'Each table covers one event. "yes" and "no" come from the client\'s docs or source; "?" means they are silent, and a `host` check reads it as unknown. A feature about an effect is "no" wherever the client cannot perform that effect. A note under a table explains why a client is "no" there.';
+
 function renderEffects(hosts: HostAdapter[]): string {
   const out = [generatedNote("its effect table and src/hosts"), "# Effects", ""];
   out.push("A plugin lists its effects as `[[then]]` tables with an `effect` key.", "", ...effectRows());
@@ -122,6 +174,7 @@ function renderHosts(hosts: HostAdapter[]): string {
       out.push(`| \`${e}\` | ${native ? `\`${native}\`` : "none"} | ${h.supports[e].join(", ") || "none"} |`);
     }
   }
+  out.push("", "## Feature matrix", "", COMPAT_INTRO, ...compatTables(hosts, "###"));
   return `${out.join("\n")}\n`;
 }
 
@@ -166,17 +219,19 @@ function main(): void {
   writeFileSync(root(`${REFS}/check-kinds.md`), renderCheckKinds(kinds));
   writeFileSync(root(`${REFS}/effects.md`), renderEffects(hosts));
   writeFileSync(root(`${REFS}/hosts.md`), renderHosts(hosts));
+  rewrite(HOST_DOCS, (t) => splice(t, HOST_DOCS, "compat", "src/hosts", [COMPAT_INTRO, ...compatTables(hosts, "###")]));
   rewrite(README, (t) => splice(t, README, "hosts", "src/hosts", supportRows(hosts)));
   const pluginDocs = rewrite(PLUGIN_DOCS, (t) => {
     const withKinds = splice(t, PLUGIN_DOCS, "check-kinds", "src/checks", checkSummaryRows(kinds));
-    return splice(withKinds, PLUGIN_DOCS, "effects", "its effect table", effectRows());
+    const withEffects = splice(withKinds, PLUGIN_DOCS, "effects", "its effect table", effectRows());
+    return splice(withEffects, PLUGIN_DOCS, "features", "src/core/features.ts", featureRows());
   });
   // The skill ships without docs/, so it carries its own copy of the plugin reference.
   writeFileSync(root(`${REFS}/plugin-format.md`), `${generatedNote(PLUGIN_DOCS)}${pluginDocs}`);
   rmSync(root(`${REFS}/examples`), { recursive: true, force: true });
   cpSync(root("examples/moodboard"), root(`${REFS}/examples/moodboard`), { recursive: true });
-  formatMarkdown([...GENERATED, README, PLUGIN_DOCS]);
-  console.log(`generated ${REFS}, the ${README} host table and the ${PLUGIN_DOCS} tables`);
+  formatMarkdown([...GENERATED, README, PLUGIN_DOCS, HOST_DOCS]);
+  console.log(`generated ${REFS}, the ${README} host table and the ${PLUGIN_DOCS} and ${HOST_DOCS} tables`);
 }
 
 main();

@@ -25,6 +25,9 @@ export const AGENT_ENV_MARKERS: readonly string[] = [
   "CODEX_VERSION",
   // packages/core/src/services/shellExecutionService.ts:59, set at :584 on every shell run.
   "GEMINI_CLI",
+  // opencode-ai 1.19.6, packages/opencode/src/index.ts: set on its own process before any
+  // session starts, and the bash tool builds its child env from that process env.
+  "OPENCODE",
 ];
 
 /** The first agent marker present in `env`, or undefined when there is none. */
