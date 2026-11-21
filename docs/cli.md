@@ -87,12 +87,12 @@ hookmux new <id> [--template <name>] [--dir <path>] [--event <event>] [--repo [o
 
 Creates `<dir>/<id>/` with `plugin.toml` and `tests.toml`. The id uses lowercase letters, digits and dashes.
 
-| Flag                  | Meaning                                                                                                              |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Flag                  | Meaning                                                                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--template <name>`   | `prompt-context` (the default), `tool-guard` (blocks a risky shell command on `tool.before`) or `session-note` (injects a note from `note.sh` on `session.start`) |
-| `--dir <path>`        | The parent folder. Default is the current folder                                                                     |
-| `--event <event>`     | `prompt.submit` (the default), `session.start`, `tool.before` or `tool.after`. Only `prompt-context` takes a choice |
-| `--repo [owner/name]` | Make the folder a publishable repository: adds a README with the install line and the plugin's card, and a CI workflow |
+| `--dir <path>`        | The parent folder. Default is the current folder                                                                                                                  |
+| `--event <event>`     | `prompt.submit` (the default), `session.start`, `tool.before` or `tool.after`. Only `prompt-context` takes a choice                                               |
+| `--repo [owner/name]` | Make the folder a publishable repository: adds a README with the install line and the plugin's card, and a CI workflow                                            |
 
 ### validate
 
@@ -167,10 +167,10 @@ For a plugin author's published install line. Sets up hookmux when it is not set
 
 At your terminal it asks which clients to wire and shows each plugin's card for a `y`. Run by an agent, it wires the client that is running it, prints the card and a code, and exits 3; you approve by replying with the code. With no terminal and no agent marker, name the client with `--host`, or it exits 2.
 
-| Flag            | Meaning                                       |
-| --------------- | --------------------------------------------- |
-| `--plugin <id>` | Install only these plugins. Repeatable        |
-| `--host <id>`   | Wire this agent client. Repeatable            |
+| Flag            | Meaning                                |
+| --------------- | -------------------------------------- |
+| `--plugin <id>` | Install only these plugins. Repeatable |
+| `--host <id>`   | Wire this agent client. Repeatable     |
 
 Exit codes: 0 done, 1 failed, 2 usage error, 3 waiting for your reply.
 
@@ -184,12 +184,12 @@ hookmux promote <id> --confirm <code>
 
 Shows the plugin's card (what it can do and where it came from), asks you to confirm, then trusts its current content and capabilities and clears its shadow flag. It never accepts `--yes`. In your own terminal it asks you to type `y`. From an agent client, or a shell with no terminal, it prints the card and a four-character code and exits 3: you approve by replying `approve <code>` in your own message, and `--confirm <code>` then turns the plugin on if it is unchanged since the card. The card expires after 30 minutes, and a relayed approval never grants `--standing`. Exit codes: 0 done, 1 refused or failed, 3 waiting for your reply.
 
-| Flag              | Meaning                                                                                                                                                                        |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--standing`      | Also let later `hookmux add` runs of this plugin activate without asking while its capabilities stay within today's                                                            |
-| `--end-standing`  | End that standing approval. Works anywhere. Cannot be combined with `--standing`                                                                                               |
-| `--grant <token>` | A one-time grant from the hub. When an agent in Claude Code or Qwen Code runs `hookmux promote <id>`, the hub makes the client ask you first and adds the grant to the command you approve |
-| `--confirm <code>` | Turn the plugin on after you replied with the code from the card                                                                                                               |
+| Flag               | Meaning                                                                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--standing`       | Also let later `hookmux add` runs of this plugin activate without asking while its capabilities stay within today's                                                                        |
+| `--end-standing`   | End that standing approval. Works anywhere. Cannot be combined with `--standing`                                                                                                           |
+| `--grant <token>`  | A one-time grant from the hub. When an agent in Claude Code or Qwen Code runs `hookmux promote <id>`, the hub makes the client ask you first and adds the grant to the command you approve |
+| `--confirm <code>` | Turn the plugin on after you replied with the code from the card                                                                                                                           |
 
 ### list
 
