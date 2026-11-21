@@ -22,6 +22,7 @@ import {
   checkNode,
   checkRegistry,
   checkSessions,
+  checkTiming,
   type Finding,
 } from "./lib/doctor-checks.ts";
 import { checkHosts } from "./lib/doctor-hosts.ts";
@@ -59,6 +60,7 @@ export async function run(argv: string[]): Promise<number> {
     ...checkRegistry(registry, paths),
     ...checkHealth(paths),
     ...checkLog(paths),
+    ...checkTiming(paths),
     ...checkSessions(paths),
   ];
   const problems = checks.filter((c) => c.status === "fail").length;

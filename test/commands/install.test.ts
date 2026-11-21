@@ -3,11 +3,11 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { before, test } from "node:test";
 import { stableNodePath } from "../../src/install/node-path.ts";
-import { cli, MOODBOARD, ROOT, runNode, type Sandbox, sandbox, trustInstalled } from "./helpers.ts";
+import { cli, MOODBOARD, moodboardCopy, ROOT, runNode, type Sandbox, sandbox, trustInstalled } from "./helpers.ts";
 
 const DIST_CLI = join(ROOT, "dist", "cli.mjs");
 
@@ -89,4 +89,60 @@ test("uninstall removes only hub entries and keeps the user's own hooks", async 
   assert.equal(r.code, 0, r.stdout);
   assert.deepEqual(settings(sb), own);
   assert.ok(existsSync(join(sb.home, "engine")), "home folder stays without --purge");
+});
+
+/** The sandbox as seen from inside Codex: a thread marker, no terminal. */
+function inCodex(sb: Sandbox): Sandbox {
+  return { ...sb, env: { ...sb.env, CODEX_THREAD_ID: "x" } };
+}
+
+test("install from an agent wires its client, adds the plugin untrusted and waits for the person", async () => {
+  const sb = inCodex(sandbox());
+  const r = await built(sb, "install", moodboardCopy(sb));
+  assert.equal(r.code, 3, r.stdout + r.stderr);
+  assert.match(r.stdout, /engine 0\.1\.0 installed/);
+  assert.match(r.stdout, /approved \d+ hub entries/);
+  assert.match(r.stdout, /hookmux: approval needed for moodboard\nhookmux plugin: moodboard/);
+  const code = /replies `approve ([A-HJ-NP-Z2-9]{4})`/.exec(r.stdout)?.[1];
+  assert.ok(code, "the card names a code");
+  assert.ok(r.stdout.includes(`hookmux promote moodboard --confirm ${code}`));
+  assert.ok(existsSync(join(sb.dir, "user", ".codex", "hooks.json")), "Codex is wired");
+  const listed = JSON.parse((await built(sb, "list", "--json")).stdout);
+  assert.equal(listed.plugins[0].status, "untrusted");
+  assert.deepEqual(
+    listed.plugins.map((p: { id: string }) => p.id),
+    ["moodboard"],
+    "no bundled plugin came along",
+  );
+});
+
+test("install by an agent with no client marker and no --host is a usage error", async () => {
+  const sb = sandbox();
+  const r = await built(sb, "install", moodboardCopy(sb));
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /name your client: hookmux install <source> --host <id>/);
+  assert.ok(!existsSync(join(sb.home, "engine")), "nothing was set up");
+});
+
+test("install leaves a newer engine in place while it wires another client", async () => {
+  const sb = inCodex(sandbox());
+  assert.equal((await built(sb, "install", moodboardCopy(sb))).code, 3);
+  const engines = join(sb.home, "engine");
+  cpSync(join(engines, "0.1.0"), join(engines, "9.9.9"), { recursive: true });
+  rmSync(join(engines, "current"));
+  symlinkSync("9.9.9", join(engines, "current"));
+  const again = await built(sb, "install", moodboardCopy(sb), "--host", "claude-code");
+  assert.equal(again.code, 3, again.stdout + again.stderr);
+  assert.equal(readlinkSync(join(engines, "current")), "9.9.9");
+  assert.ok(existsSync(join(engines, "9.9.9")), "the newer engine is not pruned");
+});
+
+test("a second install does not reinstall the engine", async () => {
+  const sb = inCodex(sandbox());
+  assert.equal((await built(sb, "install", moodboardCopy(sb))).code, 3);
+  assert.equal((await cli(sb, "new", "second", "--dir", sb.dir)).code, 0);
+  const again = await built(sb, "install", join(sb.dir, "second"));
+  assert.equal(again.code, 3, again.stdout + again.stderr);
+  assert.doesNotMatch(again.stdout, /engine |launcher /);
+  assert.match(again.stdout, /approval needed for second/);
 });

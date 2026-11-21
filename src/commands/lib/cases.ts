@@ -14,6 +14,8 @@ export interface TestCase {
   host: string;
   event: CanonicalEvent;
   cwd?: string;
+  /** Shell command a tool event carries; absent keeps the host sample's own command. */
+  command?: string;
 }
 
 /** Field docs for `hookmux schema` and the authoring skill. */
@@ -23,6 +25,7 @@ export const CASE_FIELDS: Record<string, string> = {
   host: `host id, default "${DEFAULT_HOST}"`,
   event: 'canonical event, default "prompt.submit"',
   cwd: "working folder the event reports, default the current folder",
+  command: 'shell command a tool event carries, such as "git push --force" (tool events only)',
 };
 
 export function parseCases(text: string, knownHosts: string[]): { cases: TestCase[]; problems: string[] } {
@@ -58,11 +61,14 @@ function readCase(entry: unknown, knownHosts: string[]): TestCase | string {
   const host = c.host ?? DEFAULT_HOST;
   if (typeof host !== "string" || !knownHosts.includes(host)) return `unknown host '${String(host)}'`;
   if (c.cwd !== undefined && typeof c.cwd !== "string") return "cwd must be a string";
+  if (c.command !== undefined && typeof c.command !== "string") return "command must be a string";
+  if (c.command !== undefined && !event.startsWith("tool.")) return "command only applies to tool events";
   return {
     prompt: (c.prompt as string | undefined) ?? "",
     expect: c.expect,
     host,
     event: event as CanonicalEvent,
     ...(c.cwd !== undefined ? { cwd: c.cwd as string } : {}),
+    ...(c.command !== undefined ? { command: c.command as string } : {}),
   };
 }

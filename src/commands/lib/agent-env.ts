@@ -30,9 +30,29 @@ export const AGENT_ENV_MARKERS: readonly string[] = [
   "OPENCODE",
 ];
 
+/** The client each marker belongs to, so `install` can wire the client that is running it. */
+const MARKER_HOST: Readonly<Record<string, string>> = {
+  CLAUDECODE: "claude-code",
+  CLAUDE_CODE_ENTRYPOINT: "claude-code",
+  CODEX_SANDBOX: "codex",
+  CODEX_SANDBOX_NETWORK_DISABLED: "codex",
+  CODEX_THREAD_ID: "codex",
+  CODEX_SESSION_ID: "codex",
+  CODEX_TOOL_CALL_ID: "codex",
+  CODEX_VERSION: "codex",
+  GEMINI_CLI: "gemini-cli",
+  OPENCODE: "opencode",
+};
+
 /** The first agent marker present in `env`, or undefined when there is none. */
 export function agentMarker(env: NodeJS.ProcessEnv): string | undefined {
   return AGENT_ENV_MARKERS.find((name) => env[name] !== undefined && env[name] !== "");
+}
+
+/** The host id of the agent client whose marker is in `env`, or undefined. */
+export function agentHost(env: NodeJS.ProcessEnv): string | undefined {
+  const marker = agentMarker(env);
+  return marker === undefined ? undefined : MARKER_HOST[marker];
 }
 
 export interface ActivationContext {

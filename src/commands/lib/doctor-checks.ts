@@ -9,6 +9,7 @@ import type { Registry } from "../../load/snapshot.ts";
 import { readHealth } from "../../runtime/health.ts";
 import type { HomePaths } from "../../runtime/paths.ts";
 import { VERSION } from "../../version.ts";
+import { type LogRecord, readRecords } from "./log-read.ts";
 import { describeLogStatus, readLogStatus } from "./log-status.ts";
 import type { Status } from "./output.ts";
 
@@ -25,6 +26,10 @@ const MIN_NODE_MAJOR = 22;
 const HEALTH_SHOWN = 5;
 /** Above this many session files, suggest pruning. */
 const MANY_SESSIONS = 1000;
+/** Fewer logged runs than this say too little about speed to name a slow plugin. */
+const MIN_RUNS_FOR_TIMING = 20;
+const SLOWEST_SHOWN = 3;
+const P95 = 0.95;
 
 export function checkNode(): Finding[] {
   const major = Number(process.versions.node.split(".")[0]);
@@ -139,6 +144,43 @@ export function checkHealth(paths: HomePaths): Finding[] {
 
 export function checkLog(paths: HomePaths): Finding[] {
   return [{ id: "log", status: "info", title: describeLogStatus(readLogStatus(paths)) }];
+}
+
+export interface PluginTiming {
+  id: string;
+  event: string;
+  p95Ms: number;
+}
+
+/** Plugins by 95th-percentile time per event (nearest rank), slowest first; empty below MIN_RUNS_FOR_TIMING runs. */
+export function slowestPlugins(records: LogRecord[], top = SLOWEST_SHOWN): PluginTiming[] {
+  if (records.length < MIN_RUNS_FOR_TIMING) return [];
+  const samples = new Map<string, { id: string; event: string; times: number[] }>();
+  for (const r of records) {
+    for (const p of r.plugins ?? []) {
+      if (typeof p.ms !== "number") continue;
+      const event = String(r.event ?? "?");
+      const entry = samples.get(`${p.id}\0${event}`) ?? { id: p.id, event, times: [] };
+      entry.times.push(p.ms);
+      samples.set(`${p.id}\0${event}`, entry);
+    }
+  }
+  return [...samples.values()]
+    .map(({ id, event, times }) => {
+      times.sort((a, b) => a - b);
+      return { id, event, p95Ms: times[Math.ceil(P95 * times.length) - 1] as number };
+    })
+    .sort((a, b) => b.p95Ms - a.p95Ms || a.id.localeCompare(b.id))
+    .slice(0, top);
+}
+
+/** Names the slowest plugins from the decision log; says nothing when the log is off or short. */
+export function checkTiming(paths: HomePaths): Finding[] {
+  if (!readLogStatus(paths).active) return [];
+  const slowest = slowestPlugins(readRecords(paths));
+  if (slowest.length === 0) return [];
+  const list = slowest.map((t) => `${t.id} p95 ${t.p95Ms} ms on ${t.event}`).join(", ");
+  return [{ id: "timing", status: "info", title: `slowest: ${list}` }];
 }
 
 export function checkSessions(paths: HomePaths): Finding[] {

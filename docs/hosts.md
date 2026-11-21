@@ -87,6 +87,26 @@ Each table covers one event. "yes" and "no" come from the client's docs or sourc
 - Qwen Code, `inject.markup`: < and > in added context are escaped.
 <!-- compat:end -->
 
+## Approving a plugin
+
+An agent may install a plugin, but turning it on takes your answer (see [Trust](plugins.md#trust)). hookmux gets that answer in one of two ways, depending on the client and the command. `hookmux install`, and any command other than exactly `hookmux promote <id>`, always uses the code reply when an agent runs it.
+
+- **Client prompt.** The client's own permission prompt asks you before the agent's `hookmux promote <id>` call runs. This needs a cited source saying that a hook's `ask` decision forces a prompt that no mode, rule or other hook can answer for you, and that the call is refused where no prompt can be shown. Only Claude Code and Qwen Code qualify so far. The hub asks only when it has a `tool.before` entry in the client, which it adds when an installed plugin listens to that event. Without one, the same command falls back to the code reply below.
+- **Code reply.** `promote` prints a card and a four-character code, and you send `approve <code>` as your next message. hookmux's own prompt hook reads it. This works anywhere the client reports prompts, but it is weaker evidence on clients that cannot say who wrote a prompt (`prompt.origin` is "no" in the table above): there, every prompt counts as yours.
+
+| Client (version)       | Does `ask` force a prompt before a tool call?                                                                                                                                                              | Approval path               |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Claude Code 2.1.327    | Yes. Seen under `bypassPermissions`; `claude -p` refuses (`src/hosts/claude-code.ts`).                                                                                                                     | Client prompt               |
+| Qwen Code 0.28.0       | Yes, per `hooks.md` ("PreToolUse", "Output Options"): no rule, approval mode (YOLO included) or `PermissionRequest` hook can approve it, and headless and ACP runs deny. Read from the docs, not run live. | Client prompt               |
+| Gemini CLI 0.68.0      | In the source (`packages/core/src/scheduler/hook-utils.ts`), not the docs; headless and YOLO behaviour unchecked.                                                                                          | Code reply until a live run |
+| CodeBuddy Code 2.185.0 | Docs say it forces the confirmation dialog; mode and headless behaviour unstated, and hooks are beta.                                                                                                      | Code reply until a live run |
+| Qoder CLI 1.1.94       | Docs list `ask` "to request user authorization" and say no more.                                                                                                                                           | Code reply until a live run |
+| Factory Droid 1.16.0   | No. `ask` "does not allow the call: normal permissions apply, at every autonomy level".                                                                                                                    | Code reply                  |
+| Codex 0.167.1          | No. Its output parser rejects `ask` and counts the hook as failed.                                                                                                                                         | Code reply                  |
+| opencode 1.19.6        | No. Its `permission.ask` hook exists in the plugin types but nothing triggers it.                                                                                                                          | Code reply                  |
+
+A client moves to the client prompt only after a cited source says `ask` forces a prompt and that headless runs deny it. The table says whether a live run confirmed it; Qwen Code's rests on its docs alone. The code reply shows you the card in a notice only where the client shows notices on a prompt.
+
 On every client, hookmux adds its hub entries after your existing hook groups and finds them again by the launcher path. Your own hooks are left as they are.
 
 ## Claude Code (`claude-code`)
@@ -131,7 +151,7 @@ Written from the Gemini CLI source at v0.68.0 and its hooks documentation. Not y
 
 ## Qwen Code (`qwen-code`)
 
-Written from the Qwen Code hooks documentation at release 0.28.0 (`docs/users/features/hooks.md` in QwenLM/qwen-code). Not yet run against a live client.
+Written from the Qwen Code hooks documentation at release 0.28.0 (`docs/users/features/hooks.md` in QwenLM/qwen-code). Not yet run against a live client, so the approval prompt below rests on the docs alone.
 
 - Config file: `~/.qwen/settings.json`, or `settings.json` in `$QWEN_HOME` when that is set. Timeouts are in seconds.
 - Events and output keys match Claude Code's. A blocked prompt or tool result uses `decision: "block"` with a `reason`.
@@ -139,6 +159,7 @@ Written from the Qwen Code hooks documentation at release 0.28.0 (`docs/users/fe
 - Context added before a tool call is appended to that call's result. Qwen escapes `<` and `>` in added context.
 - User hooks load whatever the folder's trust. `--safe-mode`, `--bare` and `disableAllHooks` turn all hooks off.
 - Tool names: `run_shell_command`, `write_file`, `edit` and `read_file` map to `Bash`, `Write`, `Edit` and `Read`.
+- When an agent's shell call is exactly `hookmux promote <id>` or `hookmux promote <id> --standing`, the hub answers `permissionDecision: "ask"` with the whole tool input in `updatedInput`, as Claude Code does. The docs say no permission rule, approval mode (YOLO included) or `PermissionRequest` hook can approve such a call in your place, and that headless and ACP runs deny it. We have not run this against a live Qwen Code.
 
 ## Factory Droid (`droid`)
 
@@ -191,4 +212,4 @@ Cursor and Devin CLI read `~/.claude/settings.json` by default, so once hookmux 
 
 ## Agent environment markers
 
-`hookmux promote` refuses to run when it sees the environment variables Claude Code, Codex, Gemini CLI or opencode set on the commands their agents run. The other agents here document no such variable, so for them promote relies on its terminal check alone.
+`hookmux promote` does not ask at a terminal when it sees the environment variables Claude Code, Codex, Gemini CLI or opencode set on the commands their agents run: it prints a card and a code instead. The other agents here document no such variable, so for them promote relies on its terminal check alone: a call from their agent has no terminal and gets the card and the code too.

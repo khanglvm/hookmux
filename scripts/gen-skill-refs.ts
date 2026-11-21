@@ -9,10 +9,13 @@ import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { fileURLToPath } from "node:url";
 import "../src/checks/index.ts";
 import { type CheckKind, listChecks, type Tier } from "../src/checks/registry.ts";
+import { type CardFacts, capabilityLine, renderCard } from "../src/core/card.ts";
 import { FEATURES, type FeatureDef, featuresFor, isDeclared } from "../src/core/features.ts";
 import { CANONICAL_EVENTS, type CanonicalEvent, type EffectKind } from "../src/core/types.ts";
 import { ADAPTERS } from "../src/hosts/index.ts";
 import type { HostAdapter } from "../src/hosts/types.ts";
+
+import { CARD_DEADLINE_MS, CARD_EXAMPLES } from "./card-examples.ts";
 
 const root = (path: string) => new URL(`../${path}`, import.meta.url);
 const REFS = "skills/hookmux/references";
@@ -112,6 +115,64 @@ function featureRows(): string[] {
     rows.push(`| \`${f.id}\` | ${f.events.map((e) => `\`${e}\``).join(", ")} | ${cell(f.meaning)} |`);
   }
   return rows;
+}
+
+/** Sample facts for one capability row, so the table shows the card's real wording. */
+const CAPABILITY_ROWS: { label: string; capability: string; facts: Partial<CardFacts> }[] = [
+  { label: "`script`", capability: "script", facts: { scripts: ["guard.sh"] } },
+  { label: "`block` on a tool event", capability: "block", facts: { events: ["tool.before"] } },
+  { label: "`block` on `prompt.submit`", capability: "block", facts: { events: ["prompt.submit"] } },
+  {
+    label: "`model` on `prompt.submit`",
+    capability: "model",
+    facts: { events: ["prompt.submit"], modelProviders: ["local"] },
+  },
+  {
+    label: "`model` on a tool event",
+    capability: "model",
+    facts: { events: ["tool.before"], modelProviders: ["local"] },
+  },
+  { label: "`env:NAME`", capability: "env:NAME", facts: {} },
+  { label: "`inject`", capability: "inject", facts: {} },
+  { label: "`evidence_chars:N`", capability: "evidence_chars:2000", facts: {} },
+  { label: "`notify`", capability: "notify", facts: {} },
+  { label: "any other code", capability: "something-new", facts: {} },
+];
+
+const BLANK_FACTS: CardFacts = {
+  id: "example",
+  version: "1.0.0",
+  description: "",
+  source: null,
+  ref: null,
+  commit: null,
+  events: [],
+  scripts: [],
+  modelProviders: [],
+  tier: 0,
+};
+
+/** The capability table for docs/plugins.md, from the same function the card uses. */
+function capabilityRows(): string[] {
+  const rows = ["| Capability | Risk | Line on the card |", "|---|---|---|"];
+  for (const { label, capability, facts } of CAPABILITY_ROWS) {
+    const [line] = capabilityLine(capability, { ...BLANK_FACTS, ...facts });
+    if (line) rows.push(`| ${label} | ${line.risk} | ${cell(line.text)} |`);
+  }
+  rows.push("| `event:*` | none | Not listed. The events appear in the cost line. |");
+  return rows;
+}
+
+/** The worked cards for docs/plugins.md, rendered by the card module. */
+function cardExampleRows(): string[] {
+  return CARD_EXAMPLES.flatMap((e) => [
+    `**${e.title}**`,
+    "",
+    "```text",
+    renderCard(e.facts, e.capabilities, { hash: e.hash, approval: "first approval", deadlineMs: CARD_DEADLINE_MS }),
+    "```",
+    "",
+  ]);
 }
 
 function factCell(value: boolean | null | undefined): string {
@@ -224,7 +285,9 @@ function main(): void {
   const pluginDocs = rewrite(PLUGIN_DOCS, (t) => {
     const withKinds = splice(t, PLUGIN_DOCS, "check-kinds", "src/checks", checkSummaryRows(kinds));
     const withEffects = splice(withKinds, PLUGIN_DOCS, "effects", "its effect table", effectRows());
-    return splice(withEffects, PLUGIN_DOCS, "features", "src/core/features.ts", featureRows());
+    const withFeatures = splice(withEffects, PLUGIN_DOCS, "features", "src/core/features.ts", featureRows());
+    const withCaps = splice(withFeatures, PLUGIN_DOCS, "capabilities", "src/core/card.ts", capabilityRows());
+    return splice(withCaps, PLUGIN_DOCS, "card-examples", "scripts/card-examples.ts", cardExampleRows());
   });
   // The skill ships without docs/, so it carries its own copy of the plugin reference.
   writeFileSync(root(`${REFS}/plugin-format.md`), `${generatedNote(PLUGIN_DOCS)}${pluginDocs}`);

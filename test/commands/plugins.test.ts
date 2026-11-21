@@ -60,7 +60,10 @@ test("add --list shows the plugins and installs nothing", async () => {
   const r = await cli(sb, "add", moodboardCopy(sb), "--list");
   assert.equal(r.code, 0);
   assert.match(r.stdout, /✓ moodboard 1\.0\.0 \(\.\)/);
-  assert.match(r.stdout, /capabilities: event:prompt\.submit, inject/);
+  assert.match(
+    r.stdout,
+    /hookmux: approve to turn on moodboard 1\.0\.0 from .*On every prompt · in-process checks only\. Adds text the agent reads/,
+  );
   assert.ok(!existsSync(join(sb.home, "plugins")));
 });
 
@@ -70,13 +73,13 @@ test("add --shadow records the shadow flag", async () => {
   assert.deepEqual(json(join(sb.home, "flags.json")).shadow, ["moodboard"]);
 });
 
-test("promote refuses without a terminal", async () => {
+test("promote without a terminal waits for the person instead of activating", async () => {
   const sb = sandbox();
   assert.equal((await cli(sb, "add", moodboardCopy(sb))).code, 0);
   const r = await cli(sb, "promote", "moodboard");
-  assert.equal(r.code, 1);
-  assert.match(r.stdout, /✗ promote needs your own terminal/);
-  assert.match(r.stdout, /→ run this yourself in a terminal: hookmux promote moodboard/);
+  assert.equal(r.code, 3);
+  assert.match(r.stdout, /^hookmux: approval needed for moodboard/);
+  assert.match(r.stdout, /Show this card to the user word for word/);
   assert.ok(!existsSync(join(sb.home, "trust.json")), "nothing was trusted");
 });
 
@@ -91,13 +94,13 @@ test("promote never accepts --yes", async () => {
   assert.ok(!existsSync(join(sb.home, "trust.json")), "nothing was trusted");
 });
 
-test("promote refuses inside an agent client's environment", async () => {
+test("promote inside an agent client's environment waits for the person instead of activating", async () => {
   const sb = sandbox();
   assert.equal((await cli(sb, "add", moodboardCopy(sb))).code, 0);
   for (const marker of ["CLAUDECODE", "CODEX_THREAD_ID", "GEMINI_CLI"]) {
     const r = await cli({ ...sb, env: { ...sb.env, [marker]: "1" } }, "promote", "moodboard");
-    assert.equal(r.code, 1);
-    assert.match(r.stdout, new RegExp(`✗ promote refuses to run inside an agent client \\(${marker} is set\\)`));
+    assert.equal(r.code, 3, marker);
+    assert.match(r.stdout, /approval needed for moodboard/);
   }
   assert.ok(!existsSync(join(sb.home, "trust.json")), "nothing was trusted");
 });

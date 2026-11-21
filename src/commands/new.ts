@@ -2,112 +2,98 @@
 // pass `hookmux test` as written, so authors start from something that works.
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { CANONICAL_EVENTS, type CanonicalEvent } from "../core/types.ts";
 import { PLUGIN_ID } from "../load/manifest.ts";
-import { VERSION } from "../version.ts";
 import { parseCommand, UsageError } from "./lib/args.ts";
 import { detail, say } from "./lib/output.ts";
+import { fillReadmeCard, repoFiles } from "./lib/repo-files.ts";
+import { type ScaffoldFile, scaffoldFiles, TEMPLATE_EVENT, TEMPLATES, type TemplateName } from "./lib/templates.ts";
 import { validatePlugin } from "./validate.ts";
 
-export const usage = `Usage: hookmux new <id> [--dir <path>] [--event <event>]
+export const usage = `Usage: hookmux new <id> [--template <name>] [--dir <path>] [--event <event>] [--repo [owner/name]]
 
 Creates <dir>/<id>/ with plugin.toml and tests.toml.
 
-  --dir <path>     parent folder (default: the current folder)
-  --event <event>  ${CANONICAL_EVENTS.join(", ")} (default prompt.submit)`;
+  --template <name>    ${TEMPLATES.join(", ")} (default prompt-context)
+                         tool-guard blocks a risky shell command (tool.before)
+                         session-note injects a note from note.sh (session.start)
+  --dir <path>         parent folder (default: the current folder)
+  --event <event>      ${CANONICAL_EVENTS.join(", ")} (default prompt.submit);
+                       only prompt-context takes a choice
+  --repo [owner/name]  make <id>/ a publishable repository: adds a README.md
+                       with the install line and a CI workflow`;
 
-/** Prompt plugins match the prompt; other events have no prompt, so the scaffold matches the working folder. */
-function checkBlock(event: CanonicalEvent): string {
-  if (event === "prompt.submit") {
-    return `[checks.mentions_topic]
-kind = "keywords"
-words = ["example topic", "another phrase"]`;
-  }
-  return `# ${event} has no prompt, so this example matches the working folder.
-# For tool events, field = "tool.name" or "tool.input.<key>" reads the tool call.
-[checks.mentions_topic]
-kind = "keywords"
-words = ["example-project"]
-field = "cwd"`;
+const OWNER_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+
+/** `--repo` may stand alone or take owner/name; parseArgs wants a value, so a bare flag becomes `--repo=`. */
+function normalizeRepoFlag(argv: string[]): string[] {
+  return argv.map((arg, i) => (arg === "--repo" && !OWNER_NAME.test(argv[i + 1] ?? "") ? "--repo=" : arg));
 }
 
-export function manifestTemplate(id: string, event: CanonicalEvent): string {
-  const prompt = event === "prompt.submit";
-  return `# ${id}: say in a line or two what this plugin adds and when.
-# Every key, check kind and effect: run 'hookmux schema'.
-schema = 1
-id = "${id}"
-version = "0.1.0"
-description = "One line on what this plugin does."
-requires_hookmux = ">=${VERSION}"
-events = ["${event}"]
-# guard, route, enrich or observe; lower priority runs first within a phase.
-phase = "${prompt ? "route" : "enrich"}"
-${prompt ? "" : '# Only prompts have a user or system origin; other events arrive as "unknown".\norigins = ["unknown"]\n'}# "session" fires at most once per session; "none" fires on every match.
-dedupe = "session"
-# Boolean expression over the checks below, with and, or, not and parentheses.
-when = "mentions_topic"
-
-${checkBlock(event)}
-
-# inject adds text to the agent's context; block and notify are the other effects.
-[[then]]
-effect = "inject"
-text = "Replace this with the guidance the agent should see."
-`;
+/** The template's event; an --event that disagrees with a fixed-event template is a usage error. */
+function resolveEvent(template: TemplateName, requested: string | undefined): CanonicalEvent {
+  if (template === "prompt-context") {
+    const event = (requested ?? "prompt.submit") as CanonicalEvent;
+    if (!CANONICAL_EVENTS.includes(event)) throw new UsageError(`unknown event '${event}'`);
+    return event;
+  }
+  const fixed = TEMPLATE_EVENT[template];
+  if (requested !== undefined && requested !== fixed) {
+    throw new UsageError(`the ${template} template listens to ${fixed}, not '${requested}'`);
+  }
+  return fixed;
 }
 
-export function testsTemplate(id: string, event: CanonicalEvent): string {
-  const head = `# Cases for 'hookmux test ${id}'. expect is "fire" or "silent".
-# Optional per case: host (default claude-code), event, cwd.`;
-  if (event === "prompt.submit") {
-    return `${head}
-[[case]]
-prompt = "tell me about the example topic"
-expect = "fire"
-
-[[case]]
-prompt = "rename this variable"
-expect = "silent"
-`;
+function writeFiles(dir: string, files: ScaffoldFile[]): void {
+  for (const f of files) {
+    const target = join(dir, f.path);
+    mkdirSync(dirname(target), { recursive: true, mode: 0o755 });
+    writeFileSync(target, f.content, { mode: f.mode });
   }
-  return `${head}
-[[case]]
-event = "${event}"
-cwd = "/work/example-project"
-expect = "fire"
-
-[[case]]
-event = "${event}"
-cwd = "/work/other"
-expect = "silent"
-`;
 }
 
 export async function run(argv: string[]): Promise<number> {
-  const parsed = parseCommand(argv, { dir: { type: "string" }, event: { type: "string" } }, usage, 1);
+  const parsed = parseCommand(
+    normalizeRepoFlag(argv),
+    { dir: { type: "string" }, event: { type: "string" }, template: { type: "string" }, repo: { type: "string" } },
+    usage,
+    1,
+  );
   if (!parsed) return 0;
   const id = parsed.positionals[0];
   if (!id) throw new UsageError("name the new plugin, e.g. hookmux new my-plugin");
   if (!PLUGIN_ID.test(id)) throw new UsageError(`'${id}' is not a valid id: use lowercase letters, digits and dashes`);
-  const event = (parsed.values.event ?? "prompt.submit") as CanonicalEvent;
-  if (!CANONICAL_EVENTS.includes(event)) throw new UsageError(`unknown event '${event}'`);
+  const template = (parsed.values.template ?? "prompt-context") as TemplateName;
+  if (!TEMPLATES.includes(template)) {
+    throw new UsageError(`unknown template '${template}': use ${TEMPLATES.join(", ")}`);
+  }
+  const event = resolveEvent(template, parsed.values.event);
+  const repo = parsed.values.repo;
+  if (repo !== undefined && repo !== "" && !OWNER_NAME.test(repo)) {
+    throw new UsageError(`--repo takes owner/name, not '${repo}'`);
+  }
   const dir = join(resolve(parsed.values.dir ?? "."), id);
   if (existsSync(dir)) {
     say("fail", `${dir} already exists`, `pick another id or --dir`);
     return 1;
   }
   mkdirSync(dir, { recursive: true, mode: 0o755 });
-  writeFileSync(join(dir, "plugin.toml"), manifestTemplate(id, event), { mode: 0o644 });
-  writeFileSync(join(dir, "tests.toml"), testsTemplate(id, event), { mode: 0o644 });
+  writeFiles(dir, [
+    ...scaffoldFiles(id, template, event),
+    ...(repo === undefined ? [] : repoFiles(id, template, repo)),
+  ]);
   const report = validatePlugin(dir);
   if (!report.ok) {
     say("fail", `scaffold does not validate: ${report.problems.join("; ")}`, "report this as a hookmux bug");
     return 1;
   }
+  if (repo !== undefined) fillReadmeCard(dir, id, repo);
   say("ok", `created ${dir}`);
-  detail(`edit plugin.toml and tests.toml, then: hookmux test ${dir}`);
+  // A script check stays unknown, and its cases skipped, until the test is told to run scripts.
+  const runScripts = template === "session-note" ? " --run-scripts" : "";
+  detail(`edit plugin.toml and tests.toml, then: hookmux test ${dir}${runScripts}`);
   detail(`install it: hookmux add ${dir}`);
+  if (repo !== undefined) detail("publish it: git init and push to GitHub");
   return 0;
 }

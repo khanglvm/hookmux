@@ -18,6 +18,8 @@ export interface PayloadReading {
   promptOrigin(payload: Record<string, unknown>, prompt: string | undefined): Origin;
   /** hookmux's portable tool name for the host's own name. */
   canonicalTool(name: string): string;
+  /** The submitted text, when the host reports it apart from the expanded prompt. */
+  submittedPrompt?(payload: Record<string, unknown>): string | undefined;
 }
 
 /** Returns null when the payload is not a JSON object. */
@@ -50,6 +52,8 @@ export function parseHostPayload(
     raw: payload,
   };
   if (prompt !== undefined) parsed.prompt = prompt;
+  const submitted = event === "prompt.submit" ? reading.submittedPrompt?.(p) : undefined;
+  if (submitted !== undefined) parsed.submittedPrompt = submitted;
   if (toolName !== undefined) {
     parsed.tool = { name: toolName, canonicalName: reading.canonicalTool(toolName), input: p.tool_input };
   }

@@ -51,6 +51,12 @@ export interface HookEvent {
   cwd: string;
   origin: Origin;
   prompt?: string;
+  /**
+   * The text the person submitted, on clients that report it apart from `prompt`, which can carry
+   * expansions (pasted or referenced files, command bodies) the agent may have written. A relayed
+   * approval reads this when it is present.
+   */
+  submittedPrompt?: string;
   tool?: ToolCall;
   /** Session start reason when the host reports one ("startup", "resume", "clear"). */
   source?: string;

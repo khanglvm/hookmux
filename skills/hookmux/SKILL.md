@@ -36,7 +36,7 @@ Run `hookmux list --json`. When an installed plugin already covers the request, 
 
 ### 3. Scaffold
 
-Run `hookmux new <id>` with a lowercase, dash-separated id. It writes `plugin.toml` and `tests.toml`.
+Run `hookmux new <id>` with a lowercase, dash-separated id. It writes `plugin.toml` and `tests.toml`. `--template tool-guard` starts from a shell-command blocker, `--template session-note` from a script that adds a note at session start (tool and session events have no user origin, so tool-guard is a guard-phase plugin and session-note sets `origins = ["unknown"]`), and `--repo owner/name` adds a README and a CI workflow so the folder can be pushed and installed.
 
 ### 4. Write the checks, cheapest first
 
@@ -68,16 +68,33 @@ Run `hookmux add <dir> --shadow`. A shadow plugin is evaluated and logged, and a
 
 ### 8. Hand over
 
-Tell the user what the plugin does (event, trigger, effect, and whether it can block) and the test results. Then ask for promotion in one of two ways.
-
-In Claude Code, run this as a Bash call by itself, with nothing else on the line:
+Tell the user what the plugin does (event, trigger, effect, and whether it can block) and the test results. Then run this as a Bash call by itself, with nothing else on the line:
 
 ```sh
 hookmux promote <id>
 ```
 
-The hub makes Claude Code show the user that call and wait. If they approve, the plugin goes live; if they decline, it stays off. Say what you are about to ask before you run it.
+What happens next depends on the client:
 
-In any other client, hand the same command to the user to run in their own terminal, and stop there. Promote then asks them to type `y`. It refuses without an interactive terminal, refuses `--yes`, and refuses inside your environment; that refusal is the approval step working. Running it through a pseudo-terminal, adding `--yes`, writing a `--grant` yourself, feeding the hub a payload of your own, wrapping the command so the hub does not see it, editing `~/.hookmux/trust.json` or the registry, and turning on `auto_trust_declarative` are all ways around the user's approval, so none of them is yours to do.
+- In Claude Code and Qwen Code, when an installed plugin listens to `tool.before`, the client shows the user that call and waits. Without such a plugin, promote prints a card and a code as below. If they approve, the plugin goes live; if they decline, it stays off. Say what you are about to ask before you run it.
+- In any other client, promote prints a card and a four-character code and exits 3. Show the user the card word for word and ask whether to turn the plugin on. Do not answer for them. If they agree, they reply `approve <code>` in their own message; hookmux reads that reply itself and tells you the exact command to run, `hookmux promote <id> --confirm <code>`. Run only that. If the plugin changes in between, run `hookmux promote <id>` again for a new card.
+
+Running promote through a pseudo-terminal, adding `--yes`, writing a `--grant` yourself, running `--confirm` before the user has replied, feeding the hub a payload of your own, starting another agent client with the code as its prompt, wrapping the command so the hub does not see it, editing `~/.hookmux/trust.json`, the registry or the card files, and turning on `auto_trust_declarative` are all ways around the user's approval, so none of them is yours to do. A relayed approval never grants `--standing`.
 
 Any later edit to the plugin folder un-trusts it until the user promotes it again. Say so when you change a live plugin. If the user granted a standing approval (`hookmux promote <id> --standing`), reinstall the changed plugin with `hookmux add <dir> --force` and it goes live while its capabilities stay within that approval; a new capability still needs the user's promote.
+
+## Installing a plugin for the user
+
+When the user asks you to install a plugin someone else published ("install the X plugin with hookmux"), run the install line you were given, for example:
+
+```sh
+npx -y hookmux install owner/name
+```
+
+It sets hookmux up if needed, adds the plugin off, prints the plugin's card and a four-character code, and exits 3. Then:
+
+1. Show the user the card word for word. Do not shorten or reword it: the risk words and the "Can:" lines are what they decide on.
+2. Ask whether to turn the plugin on, and wait for their reply. Do not answer for them.
+3. When the user has replied with `approve <code>`, hookmux reads the reply itself and tells you the exact command to run, `hookmux promote <id> --confirm <code>`. Run that line and nothing else. If hookmux has not seen a reply, it says so; ask again instead of retrying.
+
+This is the same on every client, Claude Code and Qwen Code included: their permission prompt covers only a bare `hookmux promote <id>` call. The same limits as in step 8 apply: no `--yes`, no `--standing`, no editing hookmux's files.

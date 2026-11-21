@@ -2,10 +2,11 @@
 // The hook writes the log (src/runtime/log.ts); this command only edits its
 // settings and pretty-prints its JSON lines.
 
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { readLogSettings, writeLogSettings } from "../runtime/log.ts";
 import { type HomePaths, homePaths } from "../runtime/paths.ts";
 import { parseCommand, positiveInt, UsageError } from "./lib/args.ts";
+import { type LogRecord, readRecords } from "./lib/log-read.ts";
 import { describeLogStatus, readLogStatus } from "./lib/log-status.ts";
 import { detail, dim, printJson, say } from "./lib/output.ts";
 
@@ -94,28 +95,6 @@ function logStatus(paths: HomePaths, argv: string[]): number {
       status.active ? undefined : "hookmux log on --for 24h",
     );
   return 0;
-}
-
-type LogRecord = Record<string, unknown> & {
-  ts?: string;
-  plugins?: { id: string; outcome: string; signals?: Record<string, unknown> }[];
-  errors?: string[];
-};
-
-function readRecords(paths: HomePaths): LogRecord[] {
-  const out: LogRecord[] = [];
-  for (const file of [`${paths.logFile}.1`, paths.logFile]) {
-    if (!existsSync(file)) continue;
-    for (const line of readFileSync(file, "utf8").split("\n")) {
-      if (line.trim() === "") continue;
-      try {
-        out.push(JSON.parse(line) as LogRecord);
-      } catch {
-        // A line cut off by a crash or rotation; skip it.
-      }
-    }
-  }
-  return out;
 }
 
 function hasErrors(r: LogRecord): boolean {

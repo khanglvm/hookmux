@@ -1,19 +1,21 @@
-// The one path that activates a plugin: show what it can do, ask the person at
-// the keyboard, then pin its content hash and capabilities in trust.json. It
-// refuses --yes, an agent client's environment and a stdin that is not a
-// terminal, so an agent can install a plugin in shadow mode but never switch it
-// on by itself.
+// The terminal path that activates a plugin, and the native-prompt grant path: show
+// the card, ask the person at the keyboard, then pin the plugin's content hash and
+// capabilities in trust.json. It refuses --yes. An agent client's environment, or a
+// stdin that is not a terminal, hands the request to relay.ts instead, which issues a
+// card and a code, so an agent can install a plugin and ask but never answer for the person.
 
 import { relative } from "node:path";
-import { readFlagsForUpdate, writeFlags } from "../../load/flags.ts";
-import { isCapabilitySubset, listPluginFiles, readTrust, uncoveredCapabilities, writeTrust } from "../../load/trust.ts";
+import { readFlagsForUpdate } from "../../load/flags.ts";
+import { listPluginFiles, readTrust, uncoveredCapabilities, writeTrust } from "../../load/trust.ts";
 import { takeGrant } from "../../runtime/grants.ts";
 import type { HomePaths } from "../../runtime/paths.ts";
-import { type ActivationRefusal, activationRefusal, agentMarker } from "./agent-env.ts";
+import { activationRefusal } from "./agent-env.ts";
+import { cardFor, changeState, pin, readPromotable } from "./approval.ts";
 import { syncAfterChange } from "./hosts.ts";
-import { bold, detail, say } from "./output.ts";
-import { inspectInstalled, installedDir, isInstalled } from "./plugins.ts";
+import { detail, say } from "./output.ts";
+import { inspectInstalled } from "./plugins.ts";
 import { confirm, isInteractive } from "./prompt.ts";
+import { relayPromote } from "./relay.ts";
 
 export interface PromoteOptions {
   assumeYes: boolean;
@@ -21,59 +23,42 @@ export interface PromoteOptions {
   standing?: boolean;
 }
 
-/** Exit code: 0 promoted (or already active), 1 refused, declined or not promotable. */
+/**
+ * Exit code: 0 promoted (or already active), 1 refused, declined or not promotable,
+ * 3 a card was issued and the person has not answered it yet (relay.ts).
+ */
 export async function promotePlugin(paths: HomePaths, id: string, opts: PromoteOptions): Promise<number> {
   const { assumeYes, standing = false } = opts;
   const refusal = activationRefusal({ assumeYes, interactive: isInteractive(), env: process.env });
-  if (refusal) {
-    sayRefusal(refusal, id);
+  if (refusal === "yes-flag") {
+    say(
+      "fail",
+      "promote does not take --yes: a person types y to activate a plugin",
+      `run this yourself in a terminal: hookmux promote ${id}`,
+    );
     return 1;
   }
-  if (!isInstalled(paths, id)) {
-    say("fail", `plugin '${id}' is not installed`, "hookmux list");
-    return 1;
-  }
-  const dir = installedDir(paths, id);
-  const row = inspectInstalled(paths).rows.find((r) => r.id === id);
-  if (!row || row.status === "invalid" || row.entry.hash === undefined) {
-    say("fail", `${id} is invalid: ${row?.entry.problem ?? "not found"}`, `hookmux validate ${dir}`);
-    return 1;
-  }
-  // The hash and capabilities come from the same compile, which read each file once:
-  // what is shown here is exactly what gets pinned, overrides in config.toml included.
-  const { hash, capabilities } = row.entry;
-  const previous = readTrust(paths.trust).plugins[id];
-  const flags = readFlagsForUpdate(paths.flags);
-  const sameContent = previous?.hash === hash;
-  const capsCovered = previous !== undefined && isCapabilitySubset(capabilities, previous.capabilities);
-  const standingCovered =
-    previous?.standing !== undefined && isCapabilitySubset(capabilities, previous.standing.capabilities);
-  if (sameContent && capsCovered && !flags.shadow.includes(id) && (!standing || standingCovered)) {
-    say("ok", `${id} is already promoted and unchanged since ${previous.promotedAt}`);
+  // An agent, or a shell with no terminal, cannot type y: it gets the card and a code for the person to answer.
+  if (refusal) return relayPromote(paths, id, { standing });
+  const p = readPromotable(paths, id);
+  if (!p) return 1;
+  const state = changeState(paths, p);
+  const { previous, change } = state;
+  if (state.alreadyApproved && (!standing || state.standingCovered)) {
+    say("ok", `${id} is already promoted and unchanged since ${previous?.promotedAt}`);
     return 0;
   }
-  describe(id, dir, capabilities, previous ? (sameContent ? (capsCovered ? "same" : "caps") : "changed") : "new");
+  describe(p.dir, cardFor(p, change).text);
   if (previous) detail(`last promoted ${previous.promotedAt}`);
-  if (standing) describeStanding(id, capabilities);
+  if (standing) describeStanding(id, p.capabilities);
   if (!(await confirm(standing ? `Activate ${id} and grant the standing approval?` : `Activate ${id}?`, false))) {
     say("info", `${id} left as it was`);
     return 1;
   }
-  pin(paths, id, { hash, capabilities }, standing);
+  pin(paths, id, p, standing, { via: "promote" });
   say("ok", `${id} promoted; it runs on the next hook event`);
   await syncAfterChange(paths);
   return 0;
-}
-
-/** Records the person's approval: the content pin, the standing approval when asked for, and no shadow flag. */
-function pin(paths: HomePaths, id: string, content: { hash: string; capabilities: string[] }, standing: boolean): void {
-  const now = new Date().toISOString();
-  const trust = readTrust(paths.trust);
-  const kept = standing ? { capabilities: content.capabilities, grantedAt: now } : trust.plugins[id]?.standing;
-  trust.plugins[id] = { ...content, promotedAt: now, via: "promote", ...(kept ? { standing: kept } : {}) };
-  writeTrust(paths.trust, trust);
-  const flags = readFlagsForUpdate(paths.flags);
-  writeFlags(paths.flags, { ...flags, shadow: flags.shadow.filter((s) => s !== id) });
 }
 
 /**
@@ -104,7 +89,10 @@ export async function promoteWithGrant(
     say("fail", `${id} changed after the approval was shown, so it was not activated`, `ask again: ${again}`);
     return 1;
   }
-  pin(paths, id, { hash: row.entry.hash, capabilities: row.entry.capabilities }, opts.standing);
+  pin(paths, id, { hash: row.entry.hash, capabilities: row.entry.capabilities }, opts.standing, {
+    via: "prompt",
+    host: grant.host,
+  });
   say("ok", `${id} promoted on your approval; it runs on the next hook event`);
   await syncAfterChange(paths);
   return 0;
@@ -172,33 +160,9 @@ function describeStanding(id: string, capabilities: string[]): void {
   detail(`  end it any time: hookmux promote ${id} --end-standing`);
 }
 
-function sayRefusal(refusal: ActivationRefusal, id: string): void {
-  const yourself = `run this yourself in a terminal: hookmux promote ${id}`;
-  if (refusal === "yes-flag") {
-    say("fail", "promote does not take --yes: a person types y to activate a plugin", yourself);
-  } else if (refusal === "agent") {
-    say(
-      "fail",
-      `promote refuses to run inside an agent client (${agentMarker(process.env)} is set): only a person can activate '${id}'`,
-      yourself,
-    );
-  } else {
-    say("fail", `promote needs your own terminal: only a person can activate '${id}'`, yourself);
-  }
-}
-
-type Change = "new" | "same" | "caps" | "changed";
-
-function describe(id: string, dir: string, capabilities: string[], change: Change): void {
-  const changeText: Record<Change, string> = {
-    new: "first promote",
-    same: "content unchanged since the last promote (clearing shadow mode)",
-    caps: "content unchanged, but config.toml overrides add capabilities since the last promote",
-    changed: "content CHANGED since the last promote",
-  };
-  console.log(bold(`Promote ${id}`));
-  detail(`capabilities: ${capabilities.join(", ") || "none"}`);
-  detail(`content: ${changeText[change]}`);
+/** The card, then the files a person can read before saying yes. */
+function describe(dir: string, card: string): void {
+  console.log(card);
   detail("files:");
   for (const f of listPluginFiles(dir).files) detail(`  ${relative(dir, f)}`);
 }

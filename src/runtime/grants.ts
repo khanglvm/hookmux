@@ -22,6 +22,8 @@ export interface PromoteGrant {
   /** What the person was told the plugin can use; config.toml overrides can change it without changing the hash. */
   capabilities: string[];
   standing: boolean;
+  /** The client whose permission prompt the person will answer. */
+  host?: string;
   tokenHash: string;
   expiresAt: number;
 }
@@ -51,7 +53,7 @@ function readGrant(file: string): PromoteGrant | null {
 export function saveGrant(
   dir: string,
   token: string,
-  request: Pick<PromoteGrant, "id" | "hash" | "capabilities" | "standing">,
+  request: Pick<PromoteGrant, "id" | "hash" | "capabilities" | "standing" | "host">,
   now = Date.now(),
 ): void {
   mkdirSync(dir, { recursive: true, mode: 0o700 });

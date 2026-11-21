@@ -17,8 +17,16 @@ export interface TrustEntry {
   hash: string;
   capabilities: string[];
   promotedAt: string;
-  /** "standing" when `hookmux add` pinned this content under a standing approval. */
-  via?: "promote" | "standing";
+  /**
+   * How the person approved: "promote" at their terminal, "prompt" in their client's permission prompt,
+   * "relay" by sending a card's code in a prompt, "standing" when `hookmux add` pinned this content under
+   * a standing approval.
+   */
+  via?: "promote" | "standing" | "prompt" | "relay";
+  /** The client the approval came through, for "prompt" and "relay". */
+  host?: string;
+  /** When hookmux saw the person's reply, for "relay"; promotedAt is when the plugin was pinned. */
+  approvedAt?: string;
   standing?: StandingApproval;
 }
 

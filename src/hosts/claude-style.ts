@@ -38,10 +38,19 @@ export interface ClaudeStyleSpec {
   configDir(env: NodeJS.ProcessEnv): string;
   /** Renders a block for prompt.submit and tool.after; tool.before always denies through permissionDecision. */
   blockOutput: BlockRenderer;
+  /**
+   * Renders the output that makes the client ask the person before a tool call, with `input`
+   * as the call to approve. Give it only where the client's docs or source say `ask` forces a
+   * prompt (no mode, rule or hook approves it instead) and refuses when none can be shown; the
+   * factory then adds the adapter's `confirm`. Absent, approval of a promote command is relayed.
+   */
+  confirmOutput?(native: string, reason: string, input: Record<string, unknown>): Record<string, unknown>;
   /** Client tool name to hookmux's portable name; names not listed pass through. */
   canonicalTools?: Readonly<Record<string, string>>;
   /** Origin of a prompt payload; defaults to "user" whenever a prompt is present. */
   promptOrigin?(payload: Record<string, unknown>, prompt: string | undefined): Origin;
+  /** The text the person submitted, when the payload carries it apart from the expanded prompt. */
+  submittedPrompt?(payload: Record<string, unknown>): string | undefined;
   /** Replaces the default single settings.json editor. */
   config?: HostConfigEditor;
   /** Note printed after each install, such as a trust step the client needs. */
@@ -152,9 +161,22 @@ export function claudeStyleAdapter(spec: ClaudeStyleSpec): HostAdapter {
       return parseHostPayload(host, event, payload, {
         promptOrigin: spec.promptOrigin ?? ((_payload, prompt) => (prompt === undefined ? "unknown" : "user")),
         canonicalTool: (name) => (Object.hasOwn(tools, name) ? (tools[name] as string) : name),
+        ...(spec.submittedPrompt ? { submittedPrompt: spec.submittedPrompt } : {}),
       });
     },
     render: (result, event) => renderClaudeStyle(spec, result, event),
+    ...(spec.confirmOutput
+      ? {
+          confirm: (_event: HookEvent, ask: { reason: string; input: Record<string, unknown> }) =>
+            JSON.stringify(
+              (spec.confirmOutput as NonNullable<ClaudeStyleSpec["confirmOutput"]>)(
+                CLAUDE_EVENTS["tool.before"],
+                ask.reason,
+                ask.input,
+              ),
+            ),
+        }
+      : {}),
     sample: (event, prompt = "hookmux doctor check") => sampleFor(spec, event, prompt),
     config,
     ...(spec.skillsDir ? { skills: { global: spec.skillsDir(process.env) } } : {}),

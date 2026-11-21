@@ -87,7 +87,23 @@ export const qwenCode = claudeStyleAdapter({
   // UserPromptSubmit and PostToolUse read top-level decision "block" with reason.
   blockOutput: (_event, _native, reason) => ({ decision: "block", reason }),
   canonicalTools: CANONICAL_TOOLS,
+  // hooks.md, "PreToolUse" > "Output Options": permissionDecision "ask" pauses and asks the user, and
+  // "no permission rule, approval mode (including YOLO), or PermissionRequest hook can approve the call
+  // instead"; headless runs and ACP deny it. "Replacing the tool input" says updatedInput replaces the
+  // whole input, which is why the full input is sent back. Read from the docs at the release above and
+  // not yet run against a live client.
+  confirmOutput: (native, reason, input) => ({
+    hookSpecificOutput: {
+      hookEventName: native,
+      permissionDecision: "ask",
+      permissionDecisionReason: reason,
+      updatedInput: input,
+    },
+  }),
   promptOrigin: originOf,
+  // hooks.md, "UserPromptSubmit": submitted_prompt is the captured submission, while prompt is the
+  // model-bound text with pastes, files and command bodies expanded. A relayed approval reads the former.
+  submittedPrompt: (payload) => (typeof payload.submitted_prompt === "string" ? payload.submitted_prompt : undefined),
   // Skills are global state under QWEN_HOME (settings.md, QWEN_HOME row).
   skillsDir: (env) => join(qwenDir(env), "skills"),
   sampleShellTool: "run_shell_command",

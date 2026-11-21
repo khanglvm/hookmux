@@ -7,13 +7,22 @@
 import { writeSync } from "node:fs";
 import { flushCompileCache } from "node:module";
 import "./checks/index.ts";
+import { renderCardShort } from "./core/card.ts";
 import { runEngine, selectPlugins } from "./core/engine.ts";
 import { offPluginsNotice } from "./core/off-plugins.ts";
 import { grantedCommand, type PromoteRequest, parsePromoteCommand } from "./core/promote-command.ts";
-import { CANONICAL_EVENTS, type CanonicalEvent, type HookEvent, type HubResult } from "./core/types.ts";
+import {
+  CANONICAL_EVENTS,
+  type CanonicalEvent,
+  emptyResult,
+  type HookEvent,
+  type HubResult,
+  type PluginSpec,
+} from "./core/types.ts";
 import { getAdapter } from "./hosts/index.ts";
 import type { HostAdapter } from "./hosts/types.ts";
 import { activeSpecs, loadRegistry, type Registry, type RegistryPlugin } from "./load/snapshot.ts";
+import { approveFromPrompt, type RelayCard } from "./runtime/cards.ts";
 import { newGrantToken, saveGrant } from "./runtime/grants.ts";
 import { recordFailures } from "./runtime/health.ts";
 import { appendLog, buildLogLine, loggingActive, readLogSettings } from "./runtime/log.ts";
@@ -58,6 +67,8 @@ interface PromoteConfirmation {
   request: PromoteRequest;
   hash: string;
   capabilities: string[];
+  /** The client whose prompt the person will answer; recorded with the approval. */
+  host: string;
   token: string;
   output: string;
 }
@@ -76,9 +87,12 @@ function promoteConfirmation(adapter: HostAdapter, registry: Registry, event: Ho
   const plugin = registry.plugins.find((p) => p.id === request.id);
   if (!plugin || plugin.status === "invalid" || plugin.hash === undefined) return null;
   const token = newGrantToken();
+  const card = plugin.card
+    ? renderCardShort(plugin.card, plugin.capabilities, registry.settings.deadlineMs)
+    : `hookmux: approve to turn on ${request.id}.`;
   const reason = [
-    `hookmux: approve to activate plugin ${request.id} (${currentState(plugin)}).`,
-    `It can use: ${plugin.capabilities.join(", ") || "nothing beyond its events"}.`,
+    card,
+    `Now: ${currentState(plugin)}.`,
     request.standing
       ? "Standing approval: later versions installed with hookmux add go live without asking while they need no more than this."
       : "",
@@ -94,7 +108,43 @@ function promoteConfirmation(adapter: HostAdapter, registry: Registry, event: Ho
       description: `hookmux: activate plugin ${request.id}`,
     },
   });
-  return { request, hash: plugin.hash, capabilities: plugin.capabilities, token, output };
+  return { request, hash: plugin.hash, capabilities: plugin.capabilities, host: adapter.id, token, output };
+}
+
+/**
+ * Approvals of relayed cards (src/commands/lib/relay.ts): a prompt the client marked as the
+ * user's that carries a card's code. One stat when no card exists. Fails open: a card that
+ * cannot be read stays unapproved and the agent is told nothing.
+ */
+function relayApprovals(paths: ReturnType<typeof homePaths>, event: HookEvent): RelayCard[] {
+  if (event.name !== "prompt.submit" || event.origin !== "user" || typeof event.prompt !== "string") return [];
+  // Claude Code wraps a background task's output, which the agent controls, in this tag. Origin only
+  // checks the start of the prompt, so a prompt carrying the tag anywhere approves nothing.
+  if (event.prompt.includes("<task-notification>")) return [];
+  try {
+    return approveFromPrompt(paths.cards, event.submittedPrompt ?? event.prompt, event.host.id);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Tells the person, from hookmux itself, what they just approved (the agent may have worded the card
+ * differently), and tells the agent the one command that finishes it.
+ */
+function addApprovalMessages(result: HubResult, event: HookEvent, approvals: RelayCard[]): void {
+  for (const card of approvals) {
+    if (event.host.supports.includes("notify")) {
+      const text = `hookmux: you approved ${card.summary} Undo: hookmux disable ${card.id}`;
+      result.notices.push({ pluginId: "hookmux", text });
+    }
+    const prefix = card.command === "npx -y hookmux" ? card.command : "hookmux";
+    const run = `${prefix} promote ${card.id} --confirm ${card.code}`;
+    result.context.push({
+      pluginId: "hookmux",
+      text: `hookmux: the user approved ${card.id} with code ${card.code}. Run exactly: ${run}`,
+    });
+  }
 }
 
 /** What the plugin is before approval; approving pins it and clears its shadow flag. */
@@ -136,7 +186,10 @@ async function run(): Promise<void> {
     if (!hookEvent) return;
     const offNotice = event === "session.start" ? offPluginsNotice(registry) : null;
     const confirmation = promoteConfirmation(adapter, registry, hookEvent);
-    if (selectPlugins(hookEvent, specs).length === 0 && offNotice === null) {
+    // Before the early return below, so an approval is seen even when no plugin listens to prompts.
+    const approvals = relayApprovals(paths, hookEvent);
+    const hasPlugins = selectPlugins(hookEvent, specs).length > 0 || offNotice !== null;
+    if (!hasPlugins && approvals.length === 0) {
       if (confirmation) {
         granted = confirmation;
         output = confirmation.output;
@@ -147,20 +200,11 @@ async function run(): Promise<void> {
     clearTimeout(watchdog);
     const deadline = registry.settings.deadlineMs;
     setTimeout(() => finish(), deadline + WATCHDOG_GRACE_MS).unref();
-    result = await runEngine({
-      event: hookEvent,
-      plugins: specs,
-      settings: {
-        deadlineMs: deadline,
-        blockRequiresRule: registry.settings.blockRequiresRule,
-        contextBudget: registry.settings.contextBudget,
-        runtime: { providers: registry.providers },
-      },
-      firedThisSession: readFired(paths.sessions, hookEvent.sessionId),
-    });
+    result = hasPlugins ? await evaluate(registry, specs, hookEvent, paths) : emptyResult();
     if (offNotice !== null && hookEvent.host.supports.includes("notify")) {
       result.notices.push({ pluginId: "hookmux", text: offNotice });
     }
+    addApprovalMessages(result, hookEvent, approvals);
     // A guard plugin's block on the command wins over the question.
     if (confirmation && !result.block) {
       granted = confirmation;
@@ -176,6 +220,26 @@ async function run(): Promise<void> {
   }
 }
 
+/** Runs the active plugins for this event under the hub deadline. */
+function evaluate(
+  registry: Registry,
+  specs: PluginSpec[],
+  event: HookEvent,
+  paths: ReturnType<typeof homePaths>,
+): Promise<HubResult> {
+  return runEngine({
+    event,
+    plugins: specs,
+    settings: {
+      deadlineMs: registry.settings.deadlineMs,
+      blockRequiresRule: registry.settings.blockRequiresRule,
+      contextBudget: registry.settings.contextBudget,
+      runtime: { providers: registry.providers },
+    },
+    firedThisSession: readFired(paths.sessions, event.sessionId),
+  });
+}
+
 /** The person answers the card long after this process exits, so the grant is on disk before then. */
 function storeGrant(dir: string, granted: PromoteConfirmation): void {
   try {
@@ -184,6 +248,7 @@ function storeGrant(dir: string, granted: PromoteConfirmation): void {
       hash: granted.hash,
       capabilities: granted.capabilities,
       standing: granted.request.standing,
+      host: granted.host,
     });
   } catch {
     // Without the grant the approved command is refused and says how to ask again.

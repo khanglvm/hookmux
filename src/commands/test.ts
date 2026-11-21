@@ -7,7 +7,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { type CompatRow, isPlain, planPlugin } from "../core/compat.ts";
 import { runEngine } from "../core/engine.ts";
-import type { PluginOutcome, PluginSpec, Signal } from "../core/types.ts";
+import type { HookEvent, PluginOutcome, PluginSpec, Signal } from "../core/types.ts";
 import { ADAPTERS } from "../hosts/index.ts";
 import { readConfig } from "../load/config.ts";
 import { compileManifest, ManifestError, PLUGIN_ID, readManifest } from "../load/manifest.ts";
@@ -54,6 +54,8 @@ interface CaseResult {
   status: CaseStatus;
   signals: Record<string, Signal>;
   note?: string;
+  /** Engine time for this case in milliseconds, from the trace. */
+  ms: number;
 }
 
 interface PluginReport {
@@ -229,7 +231,7 @@ async function runCase(
   spec: PluginSpec,
   opts: { settings: ReturnType<typeof engineSettings>; preview: boolean },
 ): Promise<CaseResult> {
-  const event = sampleEvent(adapterOrUsage(c.host), c.event, c.prompt, c.cwd);
+  const event = withCommand(sampleEvent(adapterOrUsage(c.host), c.event, c.prompt, c.cwd), c.command);
   const forced: PluginSpec = { ...spec, shadow: false, dedupe: "none", enabled: true };
   const plugin = opts.preview ? withoutScripts(forced) : forced;
   const result = await runEngine({ event, plugins: [plugin], settings: opts.settings, firedThisSession: new Set() });
@@ -254,7 +256,20 @@ async function runCase(
     status,
     signals,
     ...(note ? { note } : {}),
+    ms: Math.round(trace?.ms ?? 0),
   };
+}
+
+/** A tool event with the case's shell command in place of the host sample's. */
+function withCommand(event: HookEvent, command: string | undefined): HookEvent {
+  if (command === undefined || !event.tool) return event;
+  const input = typeof event.tool.input === "object" && event.tool.input !== null ? event.tool.input : {};
+  return { ...event, tool: { ...event.tool, input: { ...input, command } } };
+}
+
+/** Total and slowest-case time of a plugin's cases, for the "took" line. */
+function timing(cases: CaseResult[]): { totalMs: number; slowestMs: number } {
+  return { totalMs: cases.reduce((sum, c) => sum + c.ms, 0), slowestMs: Math.max(0, ...cases.map((c) => c.ms)) };
 }
 
 function scriptSkipped(c: CaseResult): boolean {
@@ -285,6 +300,10 @@ function printReports(reports: PluginReport[], summary: Summary, targetCount: nu
       }
     }
     for (const l of compatLines(r.compat.filter((row) => !isPlain(row)))) detail(`${r.id}: ${l}`);
+    if (r.cases.length > 0) {
+      const { totalMs, slowestMs } = timing(r.cases);
+      detail(`${r.id}: took ${totalMs} ms (slowest case ${slowestMs} ms)`);
+    }
   }
   say(
     summary.failed > 0 ? "fail" : "ok",

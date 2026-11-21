@@ -10,6 +10,8 @@ import { readTrust } from "../../src/load/trust.ts";
 import { homePaths } from "../../src/runtime/paths.ts";
 import { cli, moodboardCopy, runNode, type Sandbox, sandbox } from "./helpers.ts";
 
+const SHELL_TOOLS: Record<string, string> = { codex: "shell", "qwen-code": "run_shell_command" };
+
 /** Runs the hook as Claude Code would for one Bash call and returns its parsed stdout, or null when empty. */
 async function bashHook(sb: Sandbox, command: string, host = "claude-code") {
   const payload = {
@@ -17,7 +19,7 @@ async function bashHook(sb: Sandbox, command: string, host = "claude-code") {
     transcript_path: "",
     cwd: sb.dir,
     hook_event_name: "PreToolUse",
-    tool_name: host === "codex" ? "shell" : "Bash",
+    tool_name: SHELL_TOOLS[host] ?? "Bash",
     tool_input: { command, description: "promote" },
     tool_use_id: "t1",
   };
@@ -59,7 +61,7 @@ test("the hub asks the person and the approved command activates the plugin once
   sb.env.CLAUDECODE = "1";
   assert.equal((await cli(sb, "add", moodboardCopy(sb))).code, 0);
   const out = await bashHook(sb, "hookmux promote moodboard --standing");
-  assert.match(out.permissionDecisionReason, /approve to activate plugin moodboard \(not promoted yet\)/);
+  assert.match(out.permissionDecisionReason, /approve to turn on moodboard 1\.0\.0 from .*Now: not promoted yet\./);
   assert.match(out.permissionDecisionReason, /Standing approval/);
   const args = (out.updatedInput.command as string).split(" ").slice(1);
   assert.deepEqual(args.slice(0, 4), ["promote", "moodboard", "--standing", "--grant"]);
@@ -100,4 +102,19 @@ test("the hub leaves other commands, unknown plugins and hosts that cannot ask a
   assert.equal(await bashHook(sb, "hookmux promote missing"), null);
   assert.equal(await bashHook(sb, "hookmux list"), null);
   assert.equal(await bashHook(sb, "hookmux promote moodboard", "codex"), null);
+});
+
+test("Qwen Code asks the person the same way, and the grant records the client", async () => {
+  const sb = sandbox();
+  assert.equal((await cli(sb, "add", moodboardCopy(sb))).code, 0);
+  const out = await bashHook(sb, "hookmux promote moodboard", "qwen-code");
+  assert.equal(out?.permissionDecision, "ask");
+  assert.equal(out.hookEventName, "PreToolUse");
+  assert.equal(out.updatedInput.description, "hookmux: activate plugin moodboard");
+  assert.equal(out.updatedInput.command.split(" ")[3], "--grant");
+  const done = await cli(sb, ...(out.updatedInput.command as string).split(" ").slice(1));
+  assert.equal(done.code, 0, done.stdout + done.stderr);
+  const entry = readTrust(homePaths(sb.home).trust).plugins.moodboard;
+  assert.deepEqual({ via: entry?.via, host: entry?.host }, { via: "prompt", host: "qwen-code" });
+  assert.match((await cli(sb, "list")).stdout, /approved: prompt \(qwen-code\)/);
 });

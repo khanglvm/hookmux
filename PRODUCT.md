@@ -34,7 +34,7 @@ Runs on the developer's machine (macOS or Linux) on every prompt and tool call, 
 ## Product Principles
 
 - Never break the agent client: fail open.
-- A person decides what runs: promote needs a human.
+- A person decides what runs: an agent can install and ask, but turning a plugin on needs the person's answer to a card that says what it can do.
 - Rules decide blocks; a model alone never does.
 - Plugin authors never see client formats.
 

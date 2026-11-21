@@ -4,13 +4,14 @@
 
 import { statSync } from "node:fs";
 import type { ProviderSettings } from "../checks/registry.ts";
+import type { CardFacts } from "../core/card.ts";
 import type { Phase, PluginSpec } from "../core/types.ts";
 import { readJson, writeFileAtomic } from "../runtime/fsutil.ts";
 import type { HomePaths } from "../runtime/paths.ts";
 import { VERSION } from "../version.ts";
 import type { HubSettings } from "./config.ts";
 
-export const REGISTRY_FORMAT = 5;
+export const REGISTRY_FORMAT = 6;
 export const KNOWN_HOSTS = [
   "claude-code",
   "codex",
@@ -46,6 +47,8 @@ export interface RegistryPlugin {
   variants?: Record<string, PluginSpec>;
   /** "guard" when the manifest or any host makes it one, else the base phase; kept for untrusted plugins too. */
   phase?: Phase;
+  /** What the approval card shows; kept for untrusted plugins too, so the hub can ask about them. */
+  card?: CardFacts;
 }
 
 export interface Registry {

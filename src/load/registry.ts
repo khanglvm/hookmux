@@ -5,8 +5,10 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { PluginSpec } from "../core/types.ts";
+import { readSources, type SourceStore } from "../install/records.ts";
 import type { HomePaths } from "../runtime/paths.ts";
 import { VERSION } from "../version.ts";
+import { cardFactsOf } from "./card-facts.ts";
 import { readConfig } from "./config.ts";
 import { applyFlags, type FlagsRead, readFlags } from "./flags.ts";
 import {
@@ -41,7 +43,15 @@ export function compileRegistry(paths: HomePaths): Registry {
   const config = readConfig(paths.config);
   const trust = readTrust(paths.trust);
   const flags = readFlags(paths.flags);
-  const sources: SourceStamp[] = [stamp(paths.config), stamp(paths.trust), stamp(paths.flags), stamp(paths.plugins)];
+  const records = readSources(paths.sources);
+  // sources.json feeds the approval card, so a change to it must rebuild the snapshot.
+  const sources: SourceStamp[] = [
+    stamp(paths.config),
+    stamp(paths.trust),
+    stamp(paths.flags),
+    stamp(paths.sources),
+    stamp(paths.plugins),
+  ];
   const plugins: RegistryPlugin[] = [];
 
   const ids = existsSync(paths.plugins)
@@ -52,7 +62,7 @@ export function compileRegistry(paths: HomePaths): Registry {
     : [];
   for (const id of ids) {
     const dir = join(paths.plugins, id);
-    plugins.push(compileOne({ id, dir, config, flags, pinned: trust.plugins[id], sources }));
+    plugins.push(compileOne({ id, dir, config, flags, pinned: trust.plugins[id], record: records[id], sources }));
   }
   return {
     format: REGISTRY_FORMAT,
@@ -72,10 +82,11 @@ interface CompileInput {
   config: ReturnType<typeof readConfig>;
   flags: FlagsRead;
   pinned: TrustEntry | undefined;
+  record: SourceStore[string] | undefined;
   sources: SourceStamp[];
 }
 
-function compileOne({ id, dir, config, flags, pinned, sources }: CompileInput): RegistryPlugin {
+function compileOne({ id, dir, config, flags, pinned, record, sources }: CompileInput): RegistryPlugin {
   const entry: RegistryPlugin = { id, status: "invalid", warnings: [], capabilities: [] };
   try {
     // Every file is read once: the trust hash, the per-file hashes and the parsed
@@ -104,6 +115,7 @@ function compileOne({ id, dir, config, flags, pinned, sources }: CompileInput): 
     const base = flagged(compiled.base);
     const variants = Object.fromEntries(Object.entries(compiled.variants).map(([host, spec]) => [host, flagged(spec)]));
     entry.capabilities = capabilitiesOf(base, Object.values(variants));
+    entry.card = cardFactsOf({ id, base, variants: Object.values(variants), source: record });
     const decision = trustDecision({
       id,
       hash: entry.hash,

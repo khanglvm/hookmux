@@ -83,7 +83,7 @@ This plugin stops any prompt that looks like it contains an AWS key or a GitHub 
    hookmux promote no-secrets
    ```
 
-   hookmux runs a plugin only after you approve it. `promote` shows what the plugin is allowed to do (block, add context, run scripts) and asks you to type `y`, so an agent cannot switch on code that runs on every prompt without you. Run it in your own terminal.
+   hookmux runs a plugin only after you approve it. `promote` shows a card of what the plugin is allowed to do (block, add context, run scripts) and asks you to type `y`, so an agent cannot switch on code that runs on every prompt without you. Run it in your own terminal, or let your agent run it: it then shows you the card and you answer in your client (see Safety).
 
 4. Check what it decides for a prompt, without opening an agent:
 
@@ -106,6 +106,33 @@ hookmux promote <id>            # approve each one you want on
 ```
 
 It finds plugins at the repository root and under `plugins/`, `hookmux/` and `skills/*/hookmux/`. Other sources are a full https or SSH git URL, a `@ref` suffix for a branch or tag, and a GitHub `tree/<ref>/<path>` link.
+
+## Installing a plugin someone sent you
+
+A plugin author may send you one line to run, or a sentence to paste to your coding agent. Both do the same three things: set up hookmux if you do not have it yet, copy the plugin onto your machine and ask whether to turn it on. The plugin stays off until you say yes.
+
+```sh
+npx -y hookmux install owner/name
+```
+
+`npx` runs hookmux without installing it first, and works once hookmux is published on npm. It needs Node.js 22 or later. If you paste the line to your agent, the agent runs the command and shows you what it prints, but it cannot answer for you.
+
+What it prints is a card. It names the plugin, says where it came from, how often it runs and what it can do. Each thing it can do carries a risk word:
+
+- `high` means it can run code as you or stop your work: it runs a script, or it can stop a tool call or discard your prompt.
+- `medium` means it reaches further than reading: it adds text the agent reads and may follow, sends your prompt or tool details to your model provider, or passes an environment variable to its script.
+- `low` means it only shows you a message.
+
+Approve a `high` line only when you trust where the plugin came from.
+
+You answer in one of two ways:
+
+- At your own terminal, `hookmux install` shows the card and asks you to type `y`.
+- When your agent runs it, the agent shows you the card and a four-character code. Reply with `approve K7Q2` (using your code) in your next message. hookmux sees your reply and tells the agent to finish.
+
+[Safety](#safety) says what each of these proves and what it does not.
+
+To undo it, run `hookmux disable <id>` to turn the plugin off and keep it, or `hookmux remove <id>` to delete it.
 
 ## For hook authors
 
@@ -145,9 +172,46 @@ To ship it:
 
 1. Add a `tests.toml` with cases that should fire and cases that should stay silent, and run `hookmux test ./branch-note --run-scripts`.
 2. Run `hookmux validate ./branch-note` to check the manifest.
-3. Push the folder to a git repository. People install it with `hookmux add you/your-repo` and approve it with `hookmux promote branch-note`.
+3. Push the folder to a git repository. People install it with `hookmux add you/your-repo` and approve it with `hookmux promote branch-note`, or with the one-line install in [For plugin creators](#for-plugin-creators-a-one-line-install).
 
 The [plugin reference](docs/plugins.md) lists every manifest key, check kind, effect and template placeholder. `hookmux schema --json` prints the same data for tools.
+
+## For plugin creators: a one-line install
+
+You can publish a plugin so that people install hookmux and your plugin with one line, and never have to learn how hookmux works.
+
+1. Scaffold a plugin that is also a repository:
+
+   ```sh
+   hookmux new my-plugin --template tool-guard --repo you/my-plugin
+   ```
+
+   `--template` picks a starting point (`prompt-context`, `tool-guard` or `session-note`). `--repo` adds a `README.md` with the install line and a card showing what your users will approve, and a CI workflow that runs `validate` and `test`.
+
+2. Edit `plugin.toml` and `tests.toml`, then check them on your machine. The generated CI runs the same two commands on every push:
+
+   ```sh
+   hookmux validate ./my-plugin
+   hookmux test ./my-plugin --run-scripts
+   ```
+
+3. Push the folder to GitHub. Put this install line in your README:
+
+   ```sh
+   npx -y hookmux install you/my-plugin
+   ```
+
+   `npx` works once hookmux is published on npm.
+
+4. Give your users a sentence to paste to their coding agent:
+
+   ```text
+   Install the my-plugin plugin with hookmux: run `npx -y hookmux install you/my-plugin`, show me the approval card it prints word for word, and wait for my answer.
+   ```
+
+Here is what your users see. The command prints a card with what your plugin does and a risk word on each thing it can do. At a terminal, the user types `y` to turn it on. When their agent runs the line, the agent shows them the card and a short code, and the user replies with the code. The README you scaffolded shows the card, so you can check it matches what you meant to ask for.
+
+Your plugin stays off until the user approves. A change you publish later needs a new approval, unless the user granted a standing one for your plugin (see [Safety](#safety)). The [agent notes](docs/hosts.md) list which clients use which approval.
 
 ## Commands
 
@@ -156,9 +220,10 @@ The [plugin reference](docs/plugins.md) lists every manifest key, check kind, ef
 | `hookmux init`                                | Installs hookmux and adds its hook to the agents you choose          |
 | `hookmux uninstall`                           | Removes hookmux's hook from every agent config                       |
 | `hookmux sync`                                | Updates the agent configs to match the events your plugins use       |
-| `hookmux new <id>`                            | Creates a plugin folder with `plugin.toml` and `tests.toml`          |
+| `hookmux new <id>`                            | Creates a plugin folder; `--template` and `--repo` shape it          |
 | `hookmux validate <dir>`                      | Checks a plugin folder without installing it                         |
 | `hookmux test <id or dir>`                    | Runs a plugin's `tests.toml` cases                                   |
+| `hookmux install <source>`                    | Sets up hookmux, adds a plugin and asks you to approve it            |
 | `hookmux add <source>`                        | Installs plugins from a folder or git repository                     |
 | `hookmux promote <id>`                        | Approves a plugin and turns it on; asks you to confirm               |
 | `hookmux promote <id> --standing`             | Also lets later `hookmux add` updates of it go live without asking   |
@@ -176,7 +241,7 @@ The [plugin reference](docs/plugins.md) lists every manifest key, check kind, ef
 
 - A broken hook never breaks your agent. If Node or hookmux is missing, fails, hangs or runs past its time limit, the hook prints nothing and exits 0, which every agent reads as "no opinion". A check that errors or times out counts as unknown and never blocks. Because a guard that stops running also stops blocking, each session start shows you a notice naming any guard plugin that is waiting for approval or does not load.
 - Approvals are pinned to the files. `promote` records a SHA-256 hash of the plugin folder and the capabilities it has. If a file changes afterwards, whether by you, an agent or an update, the plugin stops running until you approve it again. A plugin you change often can get a standing approval (`hookmux promote <id> --standing`): later `hookmux add` updates go live without asking while they need no new capability. Anyone who can run `hookmux add`, agents included, can then replace its files within those capabilities. `hookmux promote <id> --end-standing` ends it.
-- Approval needs you. `promote` asks you to type `y`, has no `--yes` flag, and refuses when stdin is not a terminal or when it sees the environment an agent gives the commands it runs. In Claude Code, an agent that runs `hookmux promote <id>` gets Claude Code's own permission prompt, and approving that prompt turns the plugin on. This stops an agent from turning on a plugin because of an injected instruction or by accident. It is not a sandbox: a process running as your user can still edit `~/.hookmux` directly.
+- Approval needs your answer, and you see what you are answering. Before a plugin turns on you get a card: where it came from, what it says it does, how often it runs and each thing it can do, marked high, medium or low. An agent can install a plugin and ask, but it cannot answer for you. You answer in one of three ways. At your terminal, `hookmux promote <id>` asks you to type `y` and has no `--yes` flag. When stdin is not a terminal, or when it sees the environment an agent gives its commands, it does not ask there. In Claude Code and Qwen Code, when an agent runs exactly `hookmux promote <id>` and an installed plugin listens to tool calls before they run (`tool.before`), the client's own permission prompt asks you, and approving it turns the plugin on. Everywhere else, including `hookmux install` run by an agent, the agent shows you the card and a four-character code, you reply `approve <code>`, and hookmux's own prompt hook sees your reply before the plugin turns on. That last way proves that a prompt the client marked as yours carried the code. It does not prove you typed it or that the agent showed you the card honestly (hookmux repeats the card in a notice where the client shows one), and it is weaker on Gemini CLI, Factory Droid, Qoder CLI and CodeBuddy Code, which cannot say who wrote a prompt. None of this is a sandbox: a process running as your user can still edit `~/.hookmux` directly.
 - Previews run no unapproved code. `hookmux test` and `hookmux explain --all` skip the scripts of plugins you have not approved unless you pass `--run-scripts`.
 - Shadow mode lets you try a plugin safely. A plugin added with `--shadow` (or `shadow = true`) runs and is logged, but adds nothing to what the agent sees.
 - Blocks need a rule. By default a block needs a check that is not model-backed to agree, so a model's misreading cannot discard your prompt.

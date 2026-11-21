@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // hookmux command-line entry. Each command lives in its own module and is
 // loaded only when run, so `hookmux --version` stays instant. Exit codes:
-// 0 ok, 1 problems found, 2 usage error. Stack traces only with HOOKMUX_DEBUG=1.
+// 0 ok, 1 problems found, 2 usage error, 3 waiting for the person's answer (promote
+// has issued a card and the person has not replied yet). Stack traces only with HOOKMUX_DEBUG=1.
 
 import { resolve } from "node:path";
 import { UsageError } from "./commands/lib/args.ts";
@@ -25,8 +26,12 @@ const COMMANDS: Record<string, { summary: string; load: () => Promise<Command> }
     summary: "install plugins from a folder or git repo (untrusted until promoted)",
     load: () => import("./commands/add.ts"),
   },
+  install: {
+    summary: "set up hookmux and add a plugin in one step (asks you to approve it)",
+    load: () => import("./commands/install.ts"),
+  },
   promote: {
-    summary: "review and activate a plugin (your own terminal only)",
+    summary: "review and activate a plugin (asks you; an agent gets a card for you to answer)",
     load: () => import("./commands/promote.ts"),
   },
   remove: { summary: "delete an installed plugin", load: () => import("./commands/remove.ts") },

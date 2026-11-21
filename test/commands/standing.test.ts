@@ -86,7 +86,7 @@ test("promote --standing still needs a terminal; --end-standing does not", async
   assert.equal((await cli(sb, "add", moodboardCopy(sb))).code, 0);
   const refused = await cli(sb, "promote", "moodboard", "--standing");
   assert.equal(refused.code, 1);
-  assert.match(refused.stdout, /needs your own terminal/);
+  assert.match(refused.stdout, /standing approval needs your terminal or your client's permission prompt/);
   grantStanding(sb, "moodboard");
   const ended = await cli(sb, "promote", "moodboard", "--end-standing");
   assert.equal(ended.code, 0, ended.stdout + ended.stderr);

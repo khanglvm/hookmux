@@ -23,7 +23,7 @@ Canonical events: `prompt.submit`, `session.start`, `tool.before`, `tool.after`.
 ## Invariants
 
 - **Fail open.** Every error path ends in empty stdout and exit 0. `render` returns `""` when there is nothing to say.
-- **Promote needs a person.** `hookmux promote` refuses agent environments and non-terminals; keep that guard when touching promote, grants or trust pins.
+- **Activation needs the person's answer.** A plugin goes live only on one of three pieces of evidence: the person's own terminal (no `--yes`); their client's forced permission prompt, on clients whose adapter has `confirm`; or a reply carrying the card's code, seen by the hub's own `prompt.submit` with origin `user` after the card was issued, while the plugin still matches the card. Agents may install and ask; they never answer. Standing approvals never come from the relay path, and `hookmux promote` still refuses `--yes`. Add `confirm` to an adapter only with a cite that `ask` forces a prompt and that headless runs deny it, and say in `docs/hosts.md` whether a live run confirmed it. Keep each path's limits stated in `docs/design.md`.
 - **Append, never reorder** hub entries in a client config: Codex keys hook approval by position.
 - **Blocks need a rule.** A model-backed check alone never justifies a block or supplies template evidence.
 
