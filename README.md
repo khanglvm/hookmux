@@ -6,7 +6,7 @@ Coding agents such as Claude Code, Codex, Gemini CLI and Qwen Code can run a com
 
 hookmux takes that hook slot once in each agent and runs small plugins inside it. You write a behaviour once, as a plugin folder, and it works in every agent you use. Adding, changing or removing a plugin never touches an agent's config again.
 
-To use it, run `hookmux init` to wire your agents, then write a plugin or install one someone else wrote. The npm release is not published yet, so for now you build hookmux from source; the Install section below has the steps.
+To use it, run `npx hookmux init` to wire your agents, then write a plugin or install one someone else wrote. The Install section below has the details.
 
 ## What you can do with it
 
@@ -36,11 +36,28 @@ Plugins decide with checks: words, regular expressions, the tool being called, t
 ## Install
 
 <!-- docs:begin install.md -->
-hookmux needs Node.js 22 or later. The npm release is not published yet, so today you install it from source; `npx hookmux init` is the command once the package is on npm.
+hookmux needs Node.js 22 or later. It is published on npm as [`hookmux`](https://www.npmjs.com/package/hookmux).
+
+### Install from npm
+
+```sh
+npx hookmux init
+```
+
+Or install the CLI globally, so `hookmux` is on your `PATH` for later commands:
+
+```sh
+npm i -g hookmux
+hookmux init
+```
+
+`init` copies the engine into `~/.hookmux`, writes a launcher script there, and asks which agents to wire. Your existing hooks stay as they are. It then offers to install the plugins that ship with hookmux and the authoring skill, which teaches your agent to write plugins. The agents run the local launcher, never `npx`, so a hook never waits on the network.
+
+To update, install the new version (`npm i -g hookmux@latest`, or `npx hookmux@latest init`) and run `init` again. A re-run updates the engine and the agents it already wired.
 
 ### Install from source
 
-You need Node.js 22 or later, git, and pnpm 12 (the version pinned in `package.json`).
+Use this to try unreleased changes or to work on hookmux itself. You need Node.js 22 or later, git, and pnpm 12 (the version pinned in `package.json`).
 
 1. Clone the repository and install its dependencies:
 
@@ -62,32 +79,13 @@ You need Node.js 22 or later, git, and pnpm 12 (the version pinned in `package.j
    node dist/cli.mjs init
    ```
 
-`init` copies the built engine into `~/.hookmux`, writes a launcher script there, and asks which agents to wire. Your existing hooks stay as they are. It then offers to install the plugins that ship with hookmux and the authoring skill, which teaches your agent to write plugins. The agents run the local launcher, never `npx`, so a hook never waits on the network.
-
-Until the npm release exists, there is no `hookmux` command on your `PATH`. Run every command in these docs as `node /path/to/hookmux/dist/cli.mjs <command>`, or add a shell alias:
+A source install puts no `hookmux` command on your `PATH`. Run commands as `node /path/to/hookmux/dist/cli.mjs <command>`, or add a shell alias:
 
 ```sh
 alias hookmux='node /path/to/hookmux/dist/cli.mjs'
 ```
 
-To update a source install, pull the latest changes, run `pnpm install` and `pnpm build` again, then run `init` again. A re-run updates the engine and the hosts it already wired.
-
-### Install from npm (not available yet)
-
-Once the package is published, this is the install:
-
-```sh
-npx hookmux init
-```
-
-Or install the CLI globally first:
-
-```sh
-npm i -g hookmux
-hookmux init
-```
-
-These commands work only after the release. As of this writing the package is not on npm, so use the source install above.
+To update a source install, pull the latest changes, run `pnpm install` and `pnpm build` again, then run `init` again.
 
 ### Choose the agents
 
