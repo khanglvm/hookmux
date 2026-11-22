@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/khanglvm/hookmux/compare/v0.1.1...v0.1.2) (2026-11-22)
+
+
+### Bug Fixes
+
+* let a version bump pass the release checks ([8977646](https://github.com/khanglvm/hookmux/commit/8977646d1bc5912d88220019184350569c9103f6))
+
 ## [0.1.1](https://github.com/khanglvm/hookmux/compare/v0.1.0...v0.1.1) (2026-11-22)
 
 
