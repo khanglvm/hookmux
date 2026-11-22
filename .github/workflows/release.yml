@@ -125,6 +125,8 @@ jobs:
   # DOCS_SYNC_TOKEN: fine-grained token for khanglvm/docs with Actions read and write.
   docs:
     needs: publish
+    # Explicit, because a skipped release-please (every manual run) would skip this job too.
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
