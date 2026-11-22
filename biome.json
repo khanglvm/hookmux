@@ -9,6 +9,7 @@
       "!**/SKILL.md",
       "!scripts/docs-readme.mjs",
       "!scripts/docs-surfaces.mjs",
+      "!CHANGELOG.md",
       "!.github/workflows/docs.yml"
     ]
   },

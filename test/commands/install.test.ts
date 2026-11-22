@@ -10,6 +10,9 @@ import { stableNodePath } from "../../src/install/node-path.ts";
 import { cli, MOODBOARD, moodboardCopy, ROOT, runNode, type Sandbox, sandbox, trustInstalled } from "./helpers.ts";
 
 const DIST_CLI = join(ROOT, "dist", "cli.mjs");
+/** The build stamps the engine with package.json's version, which every release bumps. */
+const BUILT_VERSION: string = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
+const BUILT_VERSION_RE = BUILT_VERSION.replaceAll(".", "\\.");
 
 before(() => {
   execFileSync(process.execPath, ["scripts/build.ts"], { cwd: ROOT, stdio: "ignore" });
@@ -28,7 +31,7 @@ test("init wires Claude Code in an empty home, and a second run changes nothing"
   const first = await built(sb, "init", "--yes", "--no-skill");
   assert.equal(first.code, 0, first.stdout + first.stderr);
   assert.match(first.stdout, /✓ Claude Code: added prompt\.submit, session\.start/);
-  assert.equal(readlinkSync(join(sb.home, "engine", "current")), "0.1.0");
+  assert.equal(readlinkSync(join(sb.home, "engine", "current")), BUILT_VERSION);
   const launcher = readFileSync(join(sb.home, "bin", "hookmux-hook"), "utf8");
   assert.ok(launcher.includes(`NODE='${stableNodePath()}'`));
   assert.ok(!launcher.includes("@ROOT@"));
@@ -36,7 +39,7 @@ test("init wires Claude Code in an empty home, and a second run changes nothing"
 
   const second = await built(sb, "init", "--yes", "--no-skill");
   assert.equal(second.code, 0, second.stdout);
-  assert.match(second.stdout, /engine 0\.1\.0 already current/);
+  assert.match(second.stdout, new RegExp(`engine ${BUILT_VERSION_RE} already current`));
   assert.match(second.stdout, /Claude Code: up to date/);
   assert.equal(readFileSync(join(sb.claude, "settings.json"), "utf8"), before);
 });
@@ -100,7 +103,7 @@ test("install from an agent wires its client, adds the plugin untrusted and wait
   const sb = inCodex(sandbox());
   const r = await built(sb, "install", moodboardCopy(sb));
   assert.equal(r.code, 3, r.stdout + r.stderr);
-  assert.match(r.stdout, /engine 0\.1\.0 installed/);
+  assert.match(r.stdout, new RegExp(`engine ${BUILT_VERSION_RE} installed`));
   assert.match(r.stdout, /approved \d+ hub entries/);
   assert.match(r.stdout, /hookmux: approval needed for moodboard\nhookmux plugin: moodboard/);
   const code = /replies `approve ([A-HJ-NP-Z2-9]{4})`/.exec(r.stdout)?.[1];
@@ -128,7 +131,7 @@ test("install leaves a newer engine in place while it wires another client", asy
   const sb = inCodex(sandbox());
   assert.equal((await built(sb, "install", moodboardCopy(sb))).code, 3);
   const engines = join(sb.home, "engine");
-  cpSync(join(engines, "0.1.0"), join(engines, "9.9.9"), { recursive: true });
+  cpSync(join(engines, BUILT_VERSION), join(engines, "9.9.9"), { recursive: true });
   rmSync(join(engines, "current"));
   symlinkSync("9.9.9", join(engines, "current"));
   const again = await built(sb, "install", moodboardCopy(sb), "--host", "claude-code");
