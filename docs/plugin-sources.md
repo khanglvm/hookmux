@@ -4,10 +4,12 @@
 
 ## Install plugins other people wrote
 
+Plugins are shared as GitHub repositories, the way agent skills are. Pass the repository as `owner/repo` or as its GitHub link. For example, with the example plugin [khanglvm/hookmux-no-force-push](https://github.com/khanglvm/hookmux-no-force-push):
+
 ```sh
-hookmux add owner/repo --list   # see what the repository contains
-hookmux add owner/repo          # install its plugins
-hookmux promote <id>            # approve each one you want on
+hookmux add khanglvm/hookmux-no-force-push --list   # see what the repository contains
+hookmux add khanglvm/hookmux-no-force-push          # install its plugins
+hookmux promote no-force-push                      # approve each one you want on
 ```
 
 `add` finds plugins at the repository root and under `plugins/`, `hookmux/` and `skills/*/hookmux/`. Other sources are a full https or SSH git URL, a `@ref` suffix for a branch or tag, and a GitHub `tree/<ref>/<path>` link. Installed plugins stay untrusted until you promote them. Use `--plugin <id>` to install only some of a repository's plugins, and `--shadow` to install one that runs and is logged but adds nothing.
@@ -19,10 +21,10 @@ Read a plugin's `plugin.toml` before you promote it. `promote` also lists what t
 A plugin author may send you one line to run, or a sentence to paste to your coding agent. Both do the same three things: set up hookmux if you do not have it yet, copy the plugin onto your machine and ask whether to turn it on. The plugin stays off until you say yes.
 
 ```sh
-npx -y hookmux install owner/name
+npx -y hookmux install khanglvm/hookmux-no-force-push
 ```
 
-`npx` runs hookmux without installing it first, and works once hookmux is published on npm. It needs Node.js 22 or later. If you paste the line to your agent, the agent runs the command and shows you what it prints, but it cannot answer for you.
+Replace `khanglvm/hookmux-no-force-push` with the plugin's repository, as `owner/repo` or the full GitHub link (`https://github.com/khanglvm/hookmux-no-force-push`). `npx` runs hookmux from npm without installing it first. It needs Node.js 22 or later. If you paste the line to your agent, the agent runs the command and shows you what it prints, but it cannot answer for you.
 
 What it prints is a card. It names the plugin, says where it came from, how often it runs and what it can do. Each thing it can do carries a risk word:
 
@@ -39,7 +41,7 @@ You answer in one of two ways:
 
 [Safety](safety.md) says what each of these proves and what it does not.
 
-To undo it, run `hookmux disable <id>` to turn the plugin off and keep it, or `hookmux remove <id>` to delete it.
+To turn an installed plugin off later but keep its files, run `hookmux disable <id>`, for example `hookmux disable no-force-push`. To delete the plugin from your machine, run `hookmux remove <id>`. The id is the name after `hookmux plugin:` on the first line of the card.
 
 ## Share a plugin you wrote
 
@@ -75,7 +77,7 @@ branch=$(git branch --show-current 2>/dev/null)
 printf '{"value": true, "evidence": "%s"}\n' "$branch"
 ```
 
-To ship it:
+To ship the branch-note plugin (the [no-force-push](https://github.com/khanglvm/hookmux-no-force-push) repository is a finished example to copy):
 
 1. Add a `tests.toml` with cases that should fire and cases that should stay silent, and run `hookmux test ./branch-note --run-scripts`.
 2. Run `hookmux validate ./branch-note` to check the manifest.

@@ -19,6 +19,12 @@ hookmux init
 
 To update, install the new version (`npm i -g hookmux@latest`, or `npx hookmux@latest init`) and run `init` again. A re-run updates the engine and the agents it already wired.
 
+To try hookmux with a ready plugin, install the example [no-force-push](https://github.com/khanglvm/hookmux-no-force-push) plugin. The command sets hookmux up if needed and asks you before it turns the plugin on:
+
+```sh
+npx -y hookmux install khanglvm/hookmux-no-force-push
+```
+
 ## Install from source
 
 Use this to try unreleased changes or to work on hookmux itself. You need Node.js 22 or later, git, and pnpm 12 (the version pinned in `package.json`).

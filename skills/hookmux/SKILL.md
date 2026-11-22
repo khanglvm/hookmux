@@ -90,8 +90,10 @@ Any later edit to the plugin folder un-trusts it until the user promotes it agai
 When the user asks you to install a plugin someone else published ("install the X plugin with hookmux"), run the install line you were given, for example:
 
 ```sh
-npx -y hookmux install owner/name
+npx -y hookmux install khanglvm/hookmux-no-force-push
 ```
+
+The source is the plugin's repository, as `owner/repo` or its GitHub link.
 
 It sets hookmux up if needed, adds the plugin off, prints the plugin's card and a four-character code, and exits 3. Then:
 
