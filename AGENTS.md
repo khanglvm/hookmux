@@ -31,7 +31,7 @@ Canonical events: `prompt.submit`, `session.start`, `tool.before`, `tool.after`.
 
 - Run `pnpm check` (lint, typecheck, test, build) before you commit.
 - `pnpm build` regenerates `skills/hookmux/references/`, the host table in `README.md` and the tables in `docs/plugins.md`. Commit them with the change; CI fails on drift. Edit the generators, not the marked blocks.
-- Commit subjects follow Conventional Commits; release-please cuts releases from them.
+- Commit subjects follow Conventional Commits; release-please cuts releases from them. `feat` is a minor release; `fix`, `perf` and `docs` are patches. Merging the release PR publishes to npm through `.github/workflows/release.yml`.
 - Each adapter cites the client source or docs it was written against (version and file:line). Keep that habit for new adapters, and say in `docs/hosts.md` whether it was run against the real client.
 - A CodeGraph index lives in `.codegraph/` (git-ignored). Query it for symbols, callers and change impact before broad searches, e.g. `codegraph explore "<area or symbol>"`, `codegraph callers <symbol>` or `codegraph impact <symbol>`. In a fresh clone, build it with `codegraph init -y` (needs the `codegraph` CLI); without it, search with `rg`.
 
@@ -44,4 +44,5 @@ Canonical events: `prompt.submit`, `session.start`, `tool.before`, `tool.after`.
 - README sections between `<!-- docs:begin PAGE -->` and `<!-- docs:end -->` are generated. Edit the page in `docs/`, then run `node scripts/docs-readme.mjs`.
 - Run `node scripts/docs-readme.mjs --check` before committing. CI runs the same check.
 - Do not move or rename a published page without updating `docs/meta.json` and links to it.
+- A change is finished when GitHub, docs.khangle.dev and the npm page all show it (the `doc-sync` workflow). npm shows the README of the latest published version only, so a README change ships with a release: `docs` commits count for release-please like `fix`, so merge the release PR it opens. Then run `node scripts/docs-surfaces.mjs` until it exits 0.
 - Each page opens with an H1 and a one or two sentence summary, which the site uses as its description. Use plain ASCII punctuation (no em dashes) and no raw HTML.

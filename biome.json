@@ -8,6 +8,7 @@
       "!coverage",
       "!**/SKILL.md",
       "!scripts/docs-readme.mjs",
+      "!scripts/docs-surfaces.mjs",
       "!.github/workflows/docs.yml"
     ]
   },
