@@ -9,8 +9,10 @@ hookmux takes that hook slot once in each agent and runs small plugins inside it
 To use it, run `npx hookmux init` to wire your agents. Then write your own plugins (`hookmux new` starts one from a template) or install ones other people published. Plugins are shared as GitHub repositories, like agent skills, and one line sets hookmux up and installs any of them. A new plugin stays off until you approve it:
 
 ```sh
-npx -y hookmux install <owner>/<repo>
+npx -y hookmux install <github-username>/<repo-name>
 ```
+
+The [example below](#example-install-a-plugin-and-see-how-it-works) installs a real plugin and explains how it works.
 
 ## What you can do with it
 
@@ -22,8 +24,6 @@ A hook sees what is about to happen and answers before the agent carries on, so 
 - Point the agent at a skill or a doc when a prompt asks for a certain kind of work, such as "redesign the pricing page".
 - Tell the agent to run the tests after it edits a file.
 - Run your own script and pass what it prints to the agent, such as the current git branch or the ticket you are working on.
-
-The [no-force-push](https://github.com/khanglvm/hookmux-no-force-push) repository is a published plugin for the second item, if you want to see a real one: `npx -y hookmux install khanglvm/hookmux-no-force-push`.
 
 Plugins decide with checks: words, regular expressions, the tool being called, the working folder, your own scripts, or an optional small model. Rules-only plugins run in-process in about a millisecond.
 
@@ -38,6 +38,79 @@ Plugins decide with checks: words, regular expressions, the tool being called, t
 ```
 
 `hookmux init` adds one hookmux entry per event to each agent's hook config. When an agent fires it, hookmux reads the event, runs every plugin listening for that event, and returns one combined answer in that agent's format. A plugin is a folder with a `plugin.toml` and, optionally, scripts and tests.
+
+## Example: install a plugin and see how it works
+
+<!-- docs:begin example.md -->
+This walk-through installs a small published plugin, shows what you approve, and reads its one file line by line. The plugin, [no-force-push](https://github.com/khanglvm/hookmux-no-force-push), stops your agent from running `git push --force`. Every plugin works the same way; only the checks and effects change.
+
+### Install it
+
+Any published plugin installs with one line. Its source is the GitHub repository that holds it, in the form `<github-username>/<repo-name>`:
+
+```sh
+npx -y hookmux install khanglvm/hookmux-no-force-push
+```
+
+The command sets hookmux up if it is not set up yet, downloads the plugin from GitHub and adds it switched off. It then shows a card that says what the plugin is and what it can do:
+
+```text
+hookmux plugin: no-force-push 0.1.0
+From: github.com/khanglvm/hookmux-no-force-push @ ad5e168 (hookmux has not reviewed it)
+Does: Blocks force pushes made through the shell tool.
+Runs: Before every tool call · in-process checks only
+Can:
+  high    Can stop the agent's tool calls
+```
+
+Answer yes and the plugin is on. If you asked your coding agent to install it, the agent shows you the same card and asks you to reply with a short code; the plugin turns on only after your reply. [Safety and approvals](docs/safety.md) explains both routes.
+
+### Read the plugin
+
+The whole plugin is one file, `plugin.toml`:
+
+```toml
+schema = 1
+id = "no-force-push"
+version = "0.1.0"
+description = "Blocks force pushes made through the shell tool."
+events = ["tool.before"]
+phase = "guard"
+when = "is_shell and risky_command"
+
+[checks.is_shell]
+kind = "tool"
+names = ["Bash"]
+
+[checks.risky_command]
+kind = "regex"
+field = "tool.input.command"
+patterns = ['\bgit\s+push\b.*\s(--force|-f)(\s|$)']
+
+[[then]]
+effect = "block"
+reason = "Force pushes can overwrite other people's commits. Push without --force, or ask the user first."
+```
+
+Read it in four parts:
+
+1. **When it runs.** `events = ["tool.before"]` asks hookmux to run the plugin each time the agent is about to use a tool. `phase = "guard"` lets it see tool calls the agent starts on its own, not only the prompts you type.
+2. **What it checks.** `is_shell` is true when the tool is the shell. `risky_command` is true when the command matches the force-push pattern. Both are rules, so they run inside hookmux in about a millisecond.
+3. **When it fires.** `when = "is_shell and risky_command"` fires the plugin only when both checks are true.
+4. **What it does.** The `block` effect stops the tool call, and the agent reads the `reason`, so it can push another way or ask you.
+
+### See it work
+
+Ask your agent to force-push a branch. Before the shell command runs, the agent calls its hook, and hookmux runs the plugin. Both checks are true, so hookmux answers with a block in that agent's own format. The push never runs, and the agent tells you why. Any other command passes, because `risky_command` is false.
+
+The same file works in every supported agent. `Bash` is hookmux's shared name for the shell tool, so the check matches Gemini CLI's `run_shell_command` and the other agents' shell tools too.
+
+To turn the plugin off, run `hookmux disable no-force-push`; to delete it, run `hookmux remove no-force-push`.
+
+### Write your own
+
+Start a plugin from a template with `hookmux new <plugin-id>`, then change its checks and effects. [Write your first plugin](docs/quickstart.md) walks through one, and [Install and share plugins](docs/plugin-sources.md) shows how to publish it so other people can install it with the same one line.
+<!-- docs:end -->
 
 ## Install
 
@@ -64,10 +137,10 @@ To update, install the new version (`npm i -g hookmux@latest`, or `npx hookmux@l
 To install a plugin someone published, pass its GitHub repository. The command sets hookmux up if needed and asks you before it turns each plugin on:
 
 ```sh
-npx -y hookmux install <owner>/<repo>
+npx -y hookmux install <github-username>/<repo-name>
 ```
 
-[Install and share plugins](docs/plugin-sources.md) covers sources, approval and removal.
+[Example: install a plugin and see how it works](docs/example.md) walks through one, and [Install and share plugins](docs/plugin-sources.md) covers sources, approval and removal.
 
 ### Install from source
 
@@ -189,7 +262,7 @@ To see what each part of the manifest means, read [How plugins decide](docs/how-
 
 ### Install plugins other people wrote
 
-Plugins are shared as GitHub repositories, the way agent skills are. Pass the repository as `owner/repo` or as its GitHub link. For example, with the example plugin [khanglvm/hookmux-no-force-push](https://github.com/khanglvm/hookmux-no-force-push):
+Plugins are shared as GitHub repositories, the way agent skills are. Pass the repository as `<github-username>/<repo-name>` or as its GitHub link. For example, with the published plugin [khanglvm/hookmux-no-force-push](https://github.com/khanglvm/hookmux-no-force-push):
 
 ```sh
 hookmux add khanglvm/hookmux-no-force-push --list   # see what the repository contains
@@ -206,10 +279,10 @@ Read a plugin's `plugin.toml` before you promote it. `promote` also lists what t
 A plugin author may send you one line to run, or a sentence to paste to your coding agent. Both do the same three things: set up hookmux if you do not have it yet, copy the plugin onto your machine and ask whether to turn it on. The plugin stays off until you say yes.
 
 ```sh
-npx -y hookmux install khanglvm/hookmux-no-force-push
+npx -y hookmux install <github-username>/<repo-name>
 ```
 
-Replace `khanglvm/hookmux-no-force-push` with the plugin's repository, as `owner/repo` or the full GitHub link (`https://github.com/khanglvm/hookmux-no-force-push`). `npx` runs hookmux from npm without installing it first. It needs Node.js 22 or later. If you paste the line to your agent, the agent runs the command and shows you what it prints, but it cannot answer for you.
+Use the plugin's repository, as `<github-username>/<repo-name>` or the full GitHub link (`https://github.com/<github-username>/<repo-name>`). `npx` runs hookmux from npm without installing it first. It needs Node.js 22 or later. If you paste the line to your agent, the agent runs the command and shows you what it prints, but it cannot answer for you.
 
 What it prints is a card. It names the plugin, says where it came from, how often it runs and what it can do. Each thing it can do carries a risk word:
 

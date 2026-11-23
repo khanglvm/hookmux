@@ -2,6 +2,7 @@
   "pages": [
     "index",
     "install",
+    "example",
     "quickstart",
     "---Guides---",
     "how-plugins-decide",

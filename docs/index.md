@@ -24,10 +24,10 @@ Run `npx hookmux init` to wire your agents. Then write your own plugins, or inst
 A plugin is shared as a public GitHub repository. This line sets hookmux up if needed, adds the plugins in that repository and asks you to approve each one:
 
 ```sh
-npx -y hookmux install <owner>/<repo>
+npx -y hookmux install <github-username>/<repo-name>
 ```
 
-A plugin stays off until you say yes. The repository's GitHub link works in place of `owner/repo`. For example, [no-force-push](https://github.com/khanglvm/hookmux-no-force-push) is a published plugin for the second item in the list above: `npx -y hookmux install khanglvm/hookmux-no-force-push`.
+A plugin stays off until you say yes. The repository's GitHub link works too. [Example: install a plugin and see how it works](example.md) walks through installing a real plugin and reading its file.
 
 To write your own, `hookmux new` starts a plugin from a template; [Write your first plugin](quickstart.md) walks through one.
 
@@ -36,6 +36,7 @@ To write your own, `hookmux new` starts a plugin from a template; [Write your fi
 | You want to                                    | Read                                                             |
 | ---------------------------------------------- | ---------------------------------------------------------------- |
 | Install hookmux                                | [Install](install.md)                                            |
+| See a real plugin installed and explained      | [Example](example.md)                                            |
 | Build and run a first plugin                   | [Write your first plugin](quickstart.md)                         |
 | Understand how a plugin decides                | [How plugins decide](how-plugins-decide.md)                      |
 | Use plugins other people wrote, or share yours | [Install and share plugins](plugin-sources.md)                   |

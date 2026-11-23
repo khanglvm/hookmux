@@ -22,10 +22,10 @@ To update, install the new version (`npm i -g hookmux@latest`, or `npx hookmux@l
 To install a plugin someone published, pass its GitHub repository. The command sets hookmux up if needed and asks you before it turns each plugin on:
 
 ```sh
-npx -y hookmux install <owner>/<repo>
+npx -y hookmux install <github-username>/<repo-name>
 ```
 
-[Install and share plugins](plugin-sources.md) covers sources, approval and removal.
+[Example: install a plugin and see how it works](example.md) walks through one, and [Install and share plugins](plugin-sources.md) covers sources, approval and removal.
 
 ## Install from source
 

@@ -4,7 +4,7 @@
 
 ## Install plugins other people wrote
 
-Plugins are shared as GitHub repositories, the way agent skills are. Pass the repository as `owner/repo` or as its GitHub link. For example, with the example plugin [khanglvm/hookmux-no-force-push](https://github.com/khanglvm/hookmux-no-force-push):
+Plugins are shared as GitHub repositories, the way agent skills are. Pass the repository as `<github-username>/<repo-name>` or as its GitHub link. For example, with the published plugin [khanglvm/hookmux-no-force-push](https://github.com/khanglvm/hookmux-no-force-push):
 
 ```sh
 hookmux add khanglvm/hookmux-no-force-push --list   # see what the repository contains
@@ -21,10 +21,10 @@ Read a plugin's `plugin.toml` before you promote it. `promote` also lists what t
 A plugin author may send you one line to run, or a sentence to paste to your coding agent. Both do the same three things: set up hookmux if you do not have it yet, copy the plugin onto your machine and ask whether to turn it on. The plugin stays off until you say yes.
 
 ```sh
-npx -y hookmux install khanglvm/hookmux-no-force-push
+npx -y hookmux install <github-username>/<repo-name>
 ```
 
-Replace `khanglvm/hookmux-no-force-push` with the plugin's repository, as `owner/repo` or the full GitHub link (`https://github.com/khanglvm/hookmux-no-force-push`). `npx` runs hookmux from npm without installing it first. It needs Node.js 22 or later. If you paste the line to your agent, the agent runs the command and shows you what it prints, but it cannot answer for you.
+Use the plugin's repository, as `<github-username>/<repo-name>` or the full GitHub link (`https://github.com/<github-username>/<repo-name>`). `npx` runs hookmux from npm without installing it first. It needs Node.js 22 or later. If you paste the line to your agent, the agent runs the command and shows you what it prints, but it cannot answer for you.
 
 What it prints is a card. It names the plugin, says where it came from, how often it runs and what it can do. Each thing it can do carries a risk word:
 
