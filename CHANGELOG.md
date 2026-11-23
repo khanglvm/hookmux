@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/khanglvm/hookmux/compare/v0.1.3...v0.2.0) (2026-11-23)
+
+
+### Features
+
+* install a plugin from a folder inside a GitHub repo with owner/repo/path ([7e46822](https://github.com/khanglvm/hookmux/commit/7e468228e7f687b047a4789023262d9252b83c54))
+
+
+### Documentation
+
+* cut the README to what hookmux is, how to use it, an example, and ([7e46822](https://github.com/khanglvm/hookmux/commit/7e468228e7f687b047a4789023262d9252b83c54))
+
 ## [0.1.3](https://github.com/khanglvm/hookmux/compare/v0.1.2...v0.1.3) (2026-11-23)
 
 
