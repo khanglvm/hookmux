@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/khanglvm/hookmux/compare/v0.1.2...v0.1.3) (2026-11-23)
+
+
+### Documentation
+
+* add a walk-through that installs a plugin and explains it ([748f868](https://github.com/khanglvm/hookmux/commit/748f868be084cfcf51a3d2c268125214be0f6107))
+* show the general install line instead of one example plugin ([b1c2939](https://github.com/khanglvm/hookmux/commit/b1c2939046e0e08b00cca62c43b5683af308639f))
+
 ## [0.1.2](https://github.com/khanglvm/hookmux/compare/v0.1.1...v0.1.2) (2026-11-22)
 
 
