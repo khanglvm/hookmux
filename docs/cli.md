@@ -138,13 +138,14 @@ hookmux explain "<prompt>" [--host <id>] [--event <event>] [--all] [--run-script
 hookmux add <source> [--plugin <id>]... [--shadow] [--list] [--force]
 ```
 
-| Source                                        | Meaning                                            |
-| --------------------------------------------- | -------------------------------------------------- |
-| `./path` or `/path`                           | A local folder. An existing path always wins       |
-| `owner/repo[@ref]`                            | A GitHub repository, optionally at a branch or tag |
-| `https://host/o/r(.git)`                      | Any https git URL                                  |
-| `https://github.com/o/r/tree/<ref>/<subpath>` | A folder inside a GitHub repository                |
-| `git@host:o/r.git`                            | An SSH git URL. Uses your git credentials          |
+| Source                                        | Meaning                                                          |
+| --------------------------------------------- | ---------------------------------------------------------------- |
+| `./path` or `/path`                           | A local folder. An existing path always wins                     |
+| `owner/repo[@ref]`                            | A GitHub repository, optionally at a branch or tag               |
+| `owner/repo/path[@ref]`                       | A folder inside a GitHub repository; the ref goes after the path |
+| `https://host/o/r(.git)`                      | Any https git URL                                                |
+| `https://github.com/o/r/tree/<ref>/<subpath>` | A folder inside a GitHub repository                              |
+| `git@host:o/r.git`                            | An SSH git URL. Uses your git credentials                        |
 
 Plugins are found at `plugin.toml`, `plugins/*/`, `hookmux/*/` and `skills/*/hookmux/`.
 

@@ -93,7 +93,7 @@ When the user asks you to install a plugin someone else published ("install the 
 npx -y hookmux install <github-username>/<repo-name>
 ```
 
-The source is the plugin's repository, as `<github-username>/<repo-name>` (for example `khanglvm/hookmux-no-force-push`) or its GitHub link.
+The source is the plugin's repository, as `<github-username>/<repo-name>` (for example `khanglvm/hookmux-no-force-push`), with `/<path>` added when the plugin sits in a folder of the repository (`khanglvm/hookmux/plugins/hookmux-authoring`), or its GitHub link.
 
 It sets hookmux up if needed, adds the plugin off, prints the plugin's card and a four-character code, and exits 3. Then:
 

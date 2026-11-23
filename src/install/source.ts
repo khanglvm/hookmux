@@ -1,7 +1,7 @@
 // Parses the <source> argument of `hookmux add` into a local folder or a git
 // clone request. Pure: the caller passes the existence check, so the rules are
 // testable without a file system. An existing path always wins over the
-// `owner/repo` shorthand, so `add plugins/foo` means the local folder.
+// `owner/repo[/path]` shorthand, so `add plugins/foo` means the local folder.
 
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
@@ -12,7 +12,11 @@ export type SourceSpec =
 
 export class SourceError extends Error {}
 
-const GITHUB_SHORTHAND = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?(?:@(.+))?$/;
+/**
+ * `owner/repo[/sub/path][@ref]`. The optional path picks the folder that holds the plugin, as a
+ * GitHub tree link does; it has no `@` or `%`, so the first `@` always starts the ref.
+ */
+const GITHUB_SHORTHAND = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?(?:\/([A-Za-z0-9_.\/-]+?))?\/?(?:@(.+))?$/;
 const SSH_URL = /^git@[A-Za-z0-9.-]+:[A-Za-z0-9._/-]+$/;
 const GITHUB_TREE = /^\/([^/]+)\/([^/]+?)(?:\.git)?\/tree\/([^/]+)(?:\/(.+?))?\/?$/;
 /** A branch or tag name git accepts and that cannot be read as an option. */
@@ -28,14 +32,19 @@ export function parseSource(text: string, exists: (path: string) => boolean): So
   if (/^[a-z]+:\/\//i.test(value)) throw new SourceError("only https:// and git@ URLs are supported");
   const short = GITHUB_SHORTHAND.exec(value);
   if (short) {
+    // GitHub user and org names never contain a dot, so a dotted first segment is a host such as
+    // github.com typed without https://, not an owner.
+    if (short[1]?.includes(".")) {
+      throw new SourceError(`'${value}' starts with a host name: use owner/repo[/path] or a full https:// URL`);
+    }
     return {
       kind: "git",
       url: `https://github.com/${short[1]}/${short[2]}.git`,
-      ref: checkRef(short[3]),
-      subpath: null,
+      ref: checkRef(short[4]),
+      subpath: checkSubpath(short[3]),
     };
   }
-  throw new SourceError(`'${value}' is not a folder, owner/repo, https:// URL or git@ URL`);
+  throw new SourceError(`'${value}' is not a folder, owner/repo[/path], https:// URL or git@ URL`);
 }
 
 function localPath(value: string): string | null {

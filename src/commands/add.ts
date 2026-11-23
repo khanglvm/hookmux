@@ -31,6 +31,7 @@ approval (hookmux promote <id> --standing) covers them.
 Sources:
   ./path or /path                 a local folder (an existing path always wins)
   owner/repo[@ref]                a GitHub repository
+  owner/repo/path[@ref]           a folder inside a GitHub repository
   https://host/o/r(.git)          any https git URL
   https://github.com/o/r/tree/<ref>/<subpath>
   git@host:o/r.git                an SSH git URL (uses your git credentials)
@@ -62,7 +63,7 @@ export async function run(argv: string[]): Promise<number> {
   );
   if (!parsed) return 0;
   const sourceText = parsed.positionals[0];
-  if (!sourceText) throw new UsageError("name a source: a folder, owner/repo or a git URL");
+  if (!sourceText) throw new UsageError("name a source: a folder, owner/repo[/path] or a git URL");
   const paths = homePaths();
   const plugins = parsed.values.plugin ?? [];
   if (parsed.values.list) return listSource(paths, sourceText, plugins);

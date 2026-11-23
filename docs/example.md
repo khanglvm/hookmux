@@ -4,7 +4,7 @@ This walk-through installs a small published plugin, shows what you approve, and
 
 ## Install it
 
-Any published plugin installs with one line. Its source is the GitHub repository that holds it, in the form `<github-username>/<repo-name>`:
+Any published plugin installs with one line. Its source is the GitHub repository that holds it, in the form `<github-username>/<repo-name>`, plus `/<path>` when the plugin sits in a folder inside the repository:
 
 ```sh
 npx -y hookmux install khanglvm/hookmux-no-force-push

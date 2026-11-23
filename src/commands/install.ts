@@ -21,7 +21,7 @@ export const usage = `Usage: hookmux install <source> [--plugin <id>]... [--host
 
 Sets up hookmux if it is not set up yet, adds the plugin from <source> and asks
 you to approve it. The plugin stays off until you do. Sources are the same as
-for hookmux add: a folder, owner/repo or a git URL.
+for hookmux add: a folder, owner/repo, owner/repo/path or a git URL.
 
   --plugin <id>  only these plugins (repeatable)
   --host <id>    wire this agent client (repeatable); known: ${allAdapters()
@@ -44,7 +44,7 @@ export async function run(argv: string[]): Promise<number> {
   );
   if (!parsed) return 0;
   const source = parsed.positionals[0];
-  if (!source) throw new UsageError("name a source: a folder, owner/repo or a git URL");
+  if (!source) throw new UsageError("name a source: a folder, owner/repo[/path] or a git URL");
   const paths = homePaths();
   const atTerminal = isInteractive() && agentMarker(process.env) === undefined;
   const adapters = await chooseInstallHosts(parsed.values.host ?? [], atTerminal, process.env);

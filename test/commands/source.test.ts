@@ -14,6 +14,24 @@ test("parseSource reads GitHub shorthand with an optional ref", () => {
   assert.equal((parseSource("acme/hooks@v1.2", none) as { ref: string }).ref, "v1.2");
 });
 
+test("parseSource reads a folder path after owner/repo, before an optional ref", () => {
+  assert.deepEqual(parseSource("acme/hooks/plugins/guard", none), {
+    kind: "git",
+    url: "https://github.com/acme/hooks.git",
+    ref: null,
+    subpath: "plugins/guard",
+  });
+  assert.deepEqual(parseSource("acme/hooks/plugins/guard@release/v2", none), {
+    kind: "git",
+    url: "https://github.com/acme/hooks.git",
+    ref: "release/v2",
+    subpath: "plugins/guard",
+  });
+  assert.throws(() => parseSource("acme/hooks/../secrets", none), SourceError);
+  assert.throws(() => parseSource("acme/hooks/a//b", none), SourceError);
+  assert.throws(() => parseSource("github.com/acme/hooks", none), /host name/);
+});
+
 test("parseSource splits a GitHub tree URL into repo, ref and subpath", () => {
   assert.deepEqual(parseSource("https://github.com/acme/hooks/tree/main/plugins/guard", none), {
     kind: "git",

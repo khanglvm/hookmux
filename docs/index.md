@@ -27,7 +27,7 @@ A plugin is shared as a public GitHub repository. This line sets hookmux up if n
 npx -y hookmux install <github-username>/<repo-name>
 ```
 
-A plugin stays off until you say yes. The repository's GitHub link works too. [Example: install a plugin and see how it works](example.md) walks through installing a real plugin and reading its file.
+When the plugin sits in a folder inside the repository, add the folder's path: `<github-username>/<repo-name>/<path>`, for example `khanglvm/hookmux/plugins/hookmux-authoring`. The repository's GitHub link works too. A plugin stays off until you say yes. [Example: install a plugin and see how it works](example.md) walks through installing a real plugin and reading its file.
 
 To write your own, `hookmux new` starts a plugin from a template; [Write your first plugin](quickstart.md) walks through one.
 

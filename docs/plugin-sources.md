@@ -4,7 +4,7 @@
 
 ## Install plugins other people wrote
 
-Plugins are shared as GitHub repositories, the way agent skills are. Pass the repository as `<github-username>/<repo-name>` or as its GitHub link. For example, with the published plugin [khanglvm/hookmux-no-force-push](https://github.com/khanglvm/hookmux-no-force-push):
+Plugins are shared as GitHub repositories, the way agent skills are. Pass the repository as `<github-username>/<repo-name>` or as its GitHub link. When the plugin sits in a folder inside the repository, add the folder's path: `<github-username>/<repo-name>/<path>`, as in `khanglvm/hookmux/plugins/hookmux-authoring`. For example, with the published plugin [khanglvm/hookmux-no-force-push](https://github.com/khanglvm/hookmux-no-force-push):
 
 ```sh
 hookmux add khanglvm/hookmux-no-force-push --list   # see what the repository contains
@@ -24,7 +24,7 @@ A plugin author may send you one line to run, or a sentence to paste to your cod
 npx -y hookmux install <github-username>/<repo-name>
 ```
 
-Use the plugin's repository, as `<github-username>/<repo-name>` or the full GitHub link (`https://github.com/<github-username>/<repo-name>`). `npx` runs hookmux from npm without installing it first. It needs Node.js 22 or later. If you paste the line to your agent, the agent runs the command and shows you what it prints, but it cannot answer for you.
+Use the plugin's repository, as `<github-username>/<repo-name>` (with `/<path>` for a plugin in a folder of the repository) or the full GitHub link (`https://github.com/<github-username>/<repo-name>`). `npx` runs hookmux from npm without installing it first. It needs Node.js 22 or later. If you paste the line to your agent, the agent runs the command and shows you what it prints, but it cannot answer for you.
 
 What it prints is a card. It names the plugin, says where it came from, how often it runs and what it can do. Each thing it can do carries a risk word:
 
@@ -81,6 +81,41 @@ To ship the branch-note plugin (the [no-force-push](https://github.com/khanglvm/
 
 1. Add a `tests.toml` with cases that should fire and cases that should stay silent, and run `hookmux test ./branch-note --run-scripts`.
 2. Run `hookmux validate ./branch-note` to check the manifest.
-3. Push the folder to a git repository. People install it with `hookmux add you/your-repo` and approve it with `hookmux promote branch-note`.
+3. Push the folder to a GitHub repository. People install it with `npx -y hookmux install <github-username>/<repo-name>` and approve it from the card it prints.
 
 The [plugin.toml reference](plugins.md) lists every manifest key, check kind, effect and template placeholder. `hookmux schema --json` prints the same data for tools. [Test a plugin](testing.md) explains the test cases.
+
+## Give your users a one-line install
+
+You can publish a plugin so that people install hookmux and your plugin with one line, and never have to learn how hookmux works.
+
+1. Scaffold a plugin that is also a repository:
+
+   ```sh
+   npx hookmux new my-plugin --template tool-guard --repo <github-username>/my-plugin
+   ```
+
+   `--template` picks a starting point (`prompt-context`, `tool-guard` or `session-note`). `--repo` adds a `README.md` with the install line and the card your users will approve, and a CI workflow that runs `validate` and `test`.
+
+2. Edit `plugin.toml` and `tests.toml`, then check them on your machine. The generated CI runs the same two commands on every push:
+
+   ```sh
+   npx hookmux validate ./my-plugin
+   npx hookmux test ./my-plugin --run-scripts
+   ```
+
+3. Push the folder to GitHub and put this install line in your README:
+
+   ```sh
+   npx -y hookmux install <github-username>/my-plugin
+   ```
+
+4. Give your users a sentence to paste to their coding agent:
+
+   ```text
+   Install the my-plugin plugin with hookmux: run `npx -y hookmux install <github-username>/my-plugin`, show me the approval card it prints word for word, and wait for my answer.
+   ```
+
+Your users see a card with what your plugin does and a risk word on each thing it can do. At a terminal they type `y` to turn it on. When their agent runs the line, the agent shows them the card and a short code, and they reply with the code. The README you scaffolded shows the card, so you can check it asks for what you meant.
+
+The plugin stays off until the user approves it. A change you publish later needs a new approval, unless the user granted a standing one (see [Safety](safety.md)). [Supported agents](hosts.md) lists which agents use which approval route.

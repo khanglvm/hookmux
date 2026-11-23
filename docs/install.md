@@ -25,6 +25,8 @@ To install a plugin someone published, pass its GitHub repository. The command s
 npx -y hookmux install <github-username>/<repo-name>
 ```
 
+When the plugin sits in a folder inside the repository, add the folder's path: `<github-username>/<repo-name>/<path>`, for example `khanglvm/hookmux/plugins/hookmux-authoring`.
+
 [Example: install a plugin and see how it works](example.md) walks through one, and [Install and share plugins](plugin-sources.md) covers sources, approval and removal.
 
 ## Install from source
