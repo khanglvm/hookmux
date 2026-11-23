@@ -6,10 +6,10 @@ Coding agents such as Claude Code, Codex, Gemini CLI and Qwen Code can run a com
 
 hookmux takes that hook slot once in each agent and runs small plugins inside it. You write a behaviour once, as a plugin folder, and it works in every agent you use. Adding, changing or removing a plugin never touches an agent's config again.
 
-To use it, run `npx hookmux init` to wire your agents, then write a plugin or install one someone else wrote. Plugins are shared as GitHub repositories, like agent skills. To try one, this line sets hookmux up and installs the example [no-force-push](https://github.com/khanglvm/hookmux-no-force-push) plugin, which stops your agent from running `git push --force`. It stays off until you approve it:
+To use it, run `npx hookmux init` to wire your agents. Then write your own plugins (`hookmux new` starts one from a template) or install ones other people published. Plugins are shared as GitHub repositories, like agent skills, and one line sets hookmux up and installs any of them. A new plugin stays off until you approve it:
 
 ```sh
-npx -y hookmux install khanglvm/hookmux-no-force-push
+npx -y hookmux install <owner>/<repo>
 ```
 
 ## What you can do with it
@@ -22,6 +22,8 @@ A hook sees what is about to happen and answers before the agent carries on, so 
 - Point the agent at a skill or a doc when a prompt asks for a certain kind of work, such as "redesign the pricing page".
 - Tell the agent to run the tests after it edits a file.
 - Run your own script and pass what it prints to the agent, such as the current git branch or the ticket you are working on.
+
+The [no-force-push](https://github.com/khanglvm/hookmux-no-force-push) repository is a published plugin for the second item, if you want to see a real one: `npx -y hookmux install khanglvm/hookmux-no-force-push`.
 
 Plugins decide with checks: words, regular expressions, the tool being called, the working folder, your own scripts, or an optional small model. Rules-only plugins run in-process in about a millisecond.
 
@@ -59,11 +61,13 @@ hookmux init
 
 To update, install the new version (`npm i -g hookmux@latest`, or `npx hookmux@latest init`) and run `init` again. A re-run updates the engine and the agents it already wired.
 
-To try hookmux with a ready plugin, install the example [no-force-push](https://github.com/khanglvm/hookmux-no-force-push) plugin. The command sets hookmux up if needed and asks you before it turns the plugin on:
+To install a plugin someone published, pass its GitHub repository. The command sets hookmux up if needed and asks you before it turns each plugin on:
 
 ```sh
-npx -y hookmux install khanglvm/hookmux-no-force-push
+npx -y hookmux install <owner>/<repo>
 ```
+
+[Install and share plugins](docs/plugin-sources.md) covers sources, approval and removal.
 
 ### Install from source
 

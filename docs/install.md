@@ -19,11 +19,13 @@ hookmux init
 
 To update, install the new version (`npm i -g hookmux@latest`, or `npx hookmux@latest init`) and run `init` again. A re-run updates the engine and the agents it already wired.
 
-To try hookmux with a ready plugin, install the example [no-force-push](https://github.com/khanglvm/hookmux-no-force-push) plugin. The command sets hookmux up if needed and asks you before it turns the plugin on:
+To install a plugin someone published, pass its GitHub repository. The command sets hookmux up if needed and asks you before it turns each plugin on:
 
 ```sh
-npx -y hookmux install khanglvm/hookmux-no-force-push
+npx -y hookmux install <owner>/<repo>
 ```
+
+[Install and share plugins](plugin-sources.md) covers sources, approval and removal.
 
 ## Install from source
 

@@ -17,15 +17,19 @@ hookmux takes that hook slot once in each agent and runs your plugins inside it.
 
 Plugins decide with checks: words, regular expressions, the tool being called, the working folder, your own scripts, or an optional small model. Rules-only plugins run in-process in about a millisecond.
 
-## Try it in one line
+## Get started
 
-[no-force-push](https://github.com/khanglvm/hookmux-no-force-push) is a published example plugin that stops your agent from running `git push --force`. This line sets hookmux up, adds the plugin and asks you to approve it:
+Run `npx hookmux init` to wire your agents. Then write your own plugins, or install ones other people published.
+
+A plugin is shared as a public GitHub repository. This line sets hookmux up if needed, adds the plugins in that repository and asks you to approve each one:
 
 ```sh
-npx -y hookmux install khanglvm/hookmux-no-force-push
+npx -y hookmux install <owner>/<repo>
 ```
 
-The plugin stays off until you say yes. A plugin is shared as a public GitHub repository, so the GitHub link works as well: `npx -y hookmux install https://github.com/khanglvm/hookmux-no-force-push`.
+A plugin stays off until you say yes. The repository's GitHub link works in place of `owner/repo`. For example, [no-force-push](https://github.com/khanglvm/hookmux-no-force-push) is a published plugin for the second item in the list above: `npx -y hookmux install khanglvm/hookmux-no-force-push`.
+
+To write your own, `hookmux new` starts a plugin from a template; [Write your first plugin](quickstart.md) walks through one.
 
 ## Where to go next
 
